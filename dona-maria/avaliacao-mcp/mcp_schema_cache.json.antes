@@ -1,0 +1,912 @@
+{
+  "dona_maria_memoria": {
+    "fingerprint": "64a14876ab4a40f2",
+    "tools": [
+      {
+        "name": "memoria_consultar",
+        "description": "Leia fatos atuais e revisão. Receitas completas só com grupo=receitas; omissão retorna resumo do catálogo.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "grupo": {
+              "type": "string",
+              "enum": [
+                "perfil",
+                "preferencias",
+                "equipamentos",
+                "habilidades",
+                "operacao",
+                "restricoes",
+                "financeiro",
+                "decisoes",
+                "receitas"
+              ]
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            },
+            "resumido": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "memoria_registrar",
+        "description": "Grave um fato explícito com evidência e revisão atual. Reutilize chave; correção usa corrige_anterior. Vários fatos: use lote.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "grupo": {
+              "type": "string",
+              "enum": [
+                "perfil",
+                "preferencias",
+                "equipamentos",
+                "habilidades",
+                "operacao",
+                "restricoes",
+                "financeiro",
+                "decisoes",
+                "receitas"
+              ]
+            },
+            "chave": {
+              "type": "string",
+              "description": "Identificador estável snake_case; reutilizar em correções."
+            },
+            "valor_json": {
+              "type": [
+                "string",
+                "boolean",
+                "number",
+                "object",
+                "array",
+                "null"
+              ],
+              "description": "Prefira JSON NATIVO: false, true, 4, {\"bocas\":4}, ou uma lista. Compatibilidade: uma string é interpretada como JSON serializado; texto deve conter aspas JSON, por exemplo \"\"sem forno\"\". Use null para desconhecido/revogado."
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "confirmado",
+                "desconhecido",
+                "revogado"
+              ]
+            },
+            "fonte": {
+              "type": "string",
+              "enum": [
+                "dona_maria",
+                "usuario_projeto"
+              ]
+            },
+            "evidencia": {
+              "type": "string",
+              "description": "Trecho explícito da mensagem de quem informou o fato."
+            },
+            "revisao_esperada": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "corrige_anterior": {
+              "type": "boolean"
+            },
+            "sessao": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "grupo",
+            "chave",
+            "valor_json",
+            "status",
+            "fonte",
+            "evidencia",
+            "revisao_esperada"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "memoria_historico",
+        "description": "Leia alterações e evidências de fatos.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "grupo": {
+              "type": "string",
+              "enum": [
+                "perfil",
+                "preferencias",
+                "equipamentos",
+                "habilidades",
+                "operacao",
+                "restricoes",
+                "financeiro",
+                "decisoes",
+                "receitas"
+              ]
+            },
+            "chave": {
+              "type": "string"
+            },
+            "limite": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            }
+          },
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "memoria_registrar_lote",
+        "description": "Grave vários fatos atomicamente com uma revisão. Em conflito, reconcilie a resposta; não repita a revisão antiga.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "fatos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "grupo": {
+                    "type": "string",
+                    "enum": [
+                      "perfil",
+                      "preferencias",
+                      "equipamentos",
+                      "habilidades",
+                      "operacao",
+                      "restricoes",
+                      "financeiro",
+                      "decisoes",
+                      "receitas"
+                    ]
+                  },
+                  "chave": {
+                    "type": "string",
+                    "description": "Identificador estável snake_case; reutilizar em correções."
+                  },
+                  "valor_json": {
+                    "type": [
+                      "string",
+                      "boolean",
+                      "number",
+                      "object",
+                      "array",
+                      "null"
+                    ],
+                    "description": "Prefira JSON NATIVO: false, true, 4, {\"bocas\":4}, ou uma lista. Compatibilidade: uma string é interpretada como JSON serializado; texto deve conter aspas JSON, por exemplo \"\"sem forno\"\". Use null para desconhecido/revogado."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "confirmado",
+                      "desconhecido",
+                      "revogado"
+                    ]
+                  },
+                  "fonte": {
+                    "type": "string",
+                    "enum": [
+                      "dona_maria",
+                      "usuario_projeto"
+                    ]
+                  },
+                  "evidencia": {
+                    "type": "string",
+                    "description": "Trecho explícito da mensagem de quem informou o fato."
+                  },
+                  "corrige_anterior": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "grupo",
+                  "chave",
+                  "valor_json",
+                  "status",
+                  "fonte",
+                  "evidencia"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 50
+            },
+            "revisao_esperada": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sessao": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fatos",
+            "revisao_esperada"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "web_search",
+        "description": "Busca web real, obrigatória para novas receitas. Retorna pesquisa_id e fontes; não salva receitas.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "receita_apresentar",
+        "description": "Apresente candidata da busca e peça feedback. Rascunho não é receita salva; alterações exigem nova versão.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "pesquisa_id": {
+              "type": "string"
+            },
+            "receita": {
+              "type": "object",
+              "properties": {
+                "nome": {
+                  "type": "string"
+                },
+                "fonte_url": {
+                  "type": "string"
+                },
+                "ingredientes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "modo_preparo": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "rendimento": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "nome",
+                "fonte_url",
+                "ingredientes",
+                "modo_preparo",
+                "rendimento"
+              ],
+              "additionalProperties": false
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            }
+          },
+          "required": [
+            "pesquisa_id",
+            "receita"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "receita_aprovar",
+        "description": "Salve somente a versão explicitamente autorizada, com capacidade validada e evidência real. Gostei não autoriza salvar.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "receita_id": {
+              "type": "string"
+            },
+            "aprovado": {
+              "type": "boolean"
+            },
+            "evidencia_usuario": {
+              "type": "string"
+            },
+            "revisao_esperada": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fonte": {
+              "type": "string",
+              "enum": [
+                "dona_maria",
+                "usuario_projeto"
+              ]
+            },
+            "sessao": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "receita_id",
+            "aprovado",
+            "evidencia_usuario",
+            "revisao_esperada"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "despensa_consultar",
+        "description": "Leia quantidades e saldo atuais. resumido=false inclui custos e histórico de compras.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            },
+            "resumido": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "despensa_verificar_receita",
+        "description": "Compare todas as linhas do lote, com índices originais, inclusive temperos. Cotação opcional deve cobrir todos os faltantes.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "receita_id": {
+              "type": "string"
+            },
+            "ingredientes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "indice_receita": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ingrediente": {
+                    "type": "string"
+                  },
+                  "quantidade": {
+                    "type": [
+                      "string",
+                      "number"
+                    ],
+                    "description": "Quantidade total da embalagem/lote, decimal sem separador de milhar."
+                  },
+                  "unidade": {
+                    "type": "string"
+                  },
+                  "estado": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "indice_receita",
+                  "ingrediente",
+                  "quantidade",
+                  "unidade"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            },
+            "cotacao_id": {
+              "type": "string",
+              "description": "Opcional: cotação desta receita para verificar cobertura de TODOS os faltantes e saldo atual. Sem cotação, custo pendente não é zero."
+            }
+          },
+          "required": [
+            "receita_id",
+            "ingredientes"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "compra_cotar",
+        "description": "Cote embalagens inteiras e frete para receita com capacidade validada. Fonte web comprovada ou preço do usuário. Não gasta saldo.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "itens": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ingrediente": {
+                    "type": "string"
+                  },
+                  "quantidade": {
+                    "type": [
+                      "string",
+                      "number"
+                    ],
+                    "description": "Quantidade total da embalagem/lote, decimal sem separador de milhar."
+                  },
+                  "unidade": {
+                    "type": "string",
+                    "description": "g, kg, ml, L ou unidade de embalagem previamente cadastrada; não usar pitadas/colheres."
+                  },
+                  "valor_total_BRL": {
+                    "type": [
+                      "string",
+                      "number"
+                    ],
+                    "description": "Preço TOTAL das embalagens deste item, no máximo duas casas decimais; não é preço por grama."
+                  },
+                  "origem": {
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "usuario"
+                    ]
+                  },
+                  "fonte": {
+                    "type": "string",
+                    "description": "URL encontrada em web_search ou trecho do preço informado pelo usuário."
+                  },
+                  "descricao_embalagem": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "ingrediente",
+                  "quantidade",
+                  "unidade",
+                  "valor_total_BRL",
+                  "origem",
+                  "fonte"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 50
+            },
+            "frete_BRL": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            },
+            "receita_id": {
+              "type": "string",
+              "description": "Candidata cujo lote teve produção validada."
+            }
+          },
+          "required": [
+            "itens",
+            "frete_BRL",
+            "receita_id"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "compra_autorizar",
+        "description": "Após autorização real da cotação, acrescente estoque e desconte saldo uma vez. Revalida capacidade; não faz pedido externo.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "cotacao_id": {
+              "type": "string"
+            },
+            "aprovado": {
+              "type": "boolean"
+            },
+            "evidencia_usuario": {
+              "type": "string"
+            },
+            "sessao": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "cotacao_id",
+            "aprovado",
+            "evidencia_usuario"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "receita_verificar_producao",
+        "description": "Valide o lote contra fatos confirmados: equipamentos/capacidades, técnicas e operação. Fogão: campo=bocas, minimo necessário. Pergunte pendências.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "receita_id": {
+              "type": "string"
+            },
+            "requisitos": {
+              "type": "object",
+              "properties": {
+                "lote": {
+                  "type": "string",
+                  "description": "Lote exato/porções a produzir; não pressupor escala."
+                },
+                "equipamentos": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "chave": {
+                        "type": "string",
+                        "description": "Chave real em equipamentos/habilidades da memória. Reutilize as existentes."
+                      },
+                      "campo": {
+                        "type": "string",
+                        "description": "Campo interno do fato, ex.: bocas, capacidade_litros. Não omitir capacidade necessária."
+                      },
+                      "minimo": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "igual": {
+                        "type": [
+                          "boolean",
+                          "string",
+                          "number",
+                          "object",
+                          "array"
+                        ]
+                      },
+                      "pergunta": {
+                        "type": "string",
+                        "description": "Pergunta à Dona Maria para confirmar este requisito, se desconhecido."
+                      }
+                    },
+                    "required": [
+                      "chave",
+                      "pergunta"
+                    ],
+                    "additionalProperties": false,
+                    "oneOf": [
+                      {
+                        "required": [
+                          "minimo"
+                        ],
+                        "not": {
+                          "required": [
+                            "igual"
+                          ]
+                        }
+                      },
+                      {
+                        "required": [
+                          "igual"
+                        ],
+                        "not": {
+                          "required": [
+                            "minimo"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 40
+                },
+                "habilidades": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "chave": {
+                        "type": "string",
+                        "description": "Chave real em equipamentos/habilidades da memória. Reutilize as existentes."
+                      },
+                      "campo": {
+                        "type": "string",
+                        "description": "Campo interno do fato, ex.: bocas, capacidade_litros. Não omitir capacidade necessária."
+                      },
+                      "minimo": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "igual": {
+                        "type": [
+                          "boolean",
+                          "string",
+                          "number",
+                          "object",
+                          "array"
+                        ]
+                      },
+                      "pergunta": {
+                        "type": "string",
+                        "description": "Pergunta à Dona Maria para confirmar este requisito, se desconhecido."
+                      }
+                    },
+                    "required": [
+                      "chave",
+                      "pergunta"
+                    ],
+                    "additionalProperties": false,
+                    "oneOf": [
+                      {
+                        "required": [
+                          "minimo"
+                        ],
+                        "not": {
+                          "required": [
+                            "igual"
+                          ]
+                        }
+                      },
+                      {
+                        "required": [
+                          "igual"
+                        ],
+                        "not": {
+                          "required": [
+                            "minimo"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 40
+                },
+                "operacao": {
+                  "type": "object",
+                  "properties": {
+                    "energia": {
+                      "type": "boolean",
+                      "description": "Este lote requer eletricidade?"
+                    },
+                    "gas": {
+                      "type": "boolean",
+                      "description": "Este lote requer gás? Verificar fonte do equipamento real."
+                    },
+                    "tempo_minutos": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "geladeira_litros": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "bancada_livre": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "energia",
+                    "gas",
+                    "tempo_minutos",
+                    "geladeira_litros",
+                    "bancada_livre"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "lote",
+                "equipamentos",
+                "habilidades",
+                "operacao"
+              ],
+              "additionalProperties": false
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            }
+          },
+          "required": [
+            "receita_id",
+            "requisitos"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "receita_precificar",
+        "description": "Após aceite, capacidade e estoque garantido, calcule CMV e três preços com taxa de 10%. Reutiliza aceite e dados anteriores; não exige salvar nem escolhe preço.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "receita_id": {
+              "type": "string"
+            },
+            "ingredientes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "indice_receita": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ingrediente": {
+                    "type": "string"
+                  },
+                  "quantidade": {
+                    "type": [
+                      "string",
+                      "number"
+                    ],
+                    "description": "Quantidade total da embalagem/lote, decimal sem separador de milhar."
+                  },
+                  "unidade": {
+                    "type": "string"
+                  },
+                  "estado": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "indice_receita",
+                  "ingrediente",
+                  "quantidade",
+                  "unidade"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "porcoes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "evidencia_aceite": {
+              "type": "string",
+              "description": "Opcional quando o aceite anterior já está no histórico. Se informar, use trecho real da usuária; nunca concatene frases nem peça repetição para liberar CMV."
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            }
+          },
+          "required": [
+            "receita_id"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "receita_consultar_fluxo",
+        "description": "Retome candidata, aceite e pendências da sessão antes de repetir etapas. Recuperação de rascunho não autoriza salvar.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "receita_id": {
+              "type": "string",
+              "description": "Opcional: retoma a candidata mais recente da sessão."
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            }
+          },
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
+        "name": "medidas_consultar",
+        "description": "Converta uma medida de um ingrediente pela tabela do projeto, sem carregar o JSON inteiro. Não cruza massa e volume; estimativas exigem aceite.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "ingrediente": {
+              "type": "string"
+            },
+            "medida": {
+              "type": "string"
+            },
+            "quantidade": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "estado": {
+              "type": "string"
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            }
+          },
+          "required": [
+            "ingrediente",
+            "medida"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      }
+    ],
+    "utility_tools": [],
+    "ttl_ms": 0,
+    "written_at": 1794836134.3044536,
+    "cache_scope": "private"
+  }
+}

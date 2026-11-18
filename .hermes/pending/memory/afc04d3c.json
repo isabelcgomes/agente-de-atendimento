@@ -1,0 +1,19 @@
+{
+  "id": "afc04d3c",
+  "subsystem": "memory",
+  "action": "batch",
+  "summary": "background review consolidation (batch on memory): - remove: Dona Maria exige: sempre usar subagente de pesquisa (delegate_task com papel pesquisa.md) para pesquisar receitas na web — nunca sugerir re",
+  "origin": "background_review",
+  "created_at": 1794951113.8259664,
+  "payload": {
+    "action": "batch",
+    "target": "memory",
+    "operations": [
+      {
+        "action": "remove",
+        "old_text": "Dona Maria exige: sempre usar subagente de pesquisa (delegate_task com papel pesquisa.md) para pesquisar receitas na web — nunca sugerir receita da própria memória ou com web_search direto.",
+        "matched_entry": "Dona Maria exige: sempre usar subagente de pesquisa (delegate_task com papel pesquisa.md) para pesquisar receitas na web — nunca sugerir receita da própria memória ou com web_search direto."
+      }
+    ]
+  }
+}

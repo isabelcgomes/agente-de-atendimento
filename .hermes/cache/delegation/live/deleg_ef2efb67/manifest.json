@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_ef2efb67",
+  "started": "2026-11-17 01:15:51",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Pesquise uma receita real na web que seja possivel com os ingredientes da despensa. Nao repita as receitas ja confirmadas. Retorne APENAS JSON.",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_ef2efb67/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-17 01:17:07"
+}

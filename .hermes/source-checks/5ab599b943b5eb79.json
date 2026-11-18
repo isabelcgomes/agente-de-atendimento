@@ -1,0 +1,32 @@
+{
+  "identity": {
+    "root": "/home/opc/.hermes/hermes-agent",
+    "home": "/home/opc/.hermes",
+    "head": "3b421578588243f920886e6fe79a6faa87ea026e",
+    "origin": "https://github.com/NousResearch/hermes-agent.git",
+    "branch": "main",
+    "channel": "stable",
+    "embedded": null,
+    "branchOverride": false,
+    "channelProtocol": 3,
+    "forwardOnly": true
+  },
+  "ts": 1794941156.1432931,
+  "status": {
+    "supported": true,
+    "hermesRoot": "/home/opc/.hermes/hermes-agent",
+    "behind": -1,
+    "commits": [],
+    "currentSha": "3b421578588243f920886e6fe79a6faa87ea026e",
+    "currentBranch": "HEAD",
+    "dirty": false,
+    "channel": "stable",
+    "fetchedAt": 1794941156143,
+    "targetSha": "ae2a81ccc00e9b7c06301523e5bb09608397149c",
+    "updateAvailable": true,
+    "sourceVersion": "0.23.2",
+    "buildId": null,
+    "aheadOfRelease": false,
+    "rollback": false
+  }
+}

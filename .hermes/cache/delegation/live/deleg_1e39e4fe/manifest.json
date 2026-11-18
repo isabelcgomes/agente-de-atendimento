@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_1e39e4fe",
+  "started": "2026-11-17 00:24:57",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Calcule o CMV e os precos sugeridos para a receita Arroz de Forno com Frango Gratinado (receita_id=Z9iNXVaWKTSOtROw4BqnGCzt, lote=6 porcoes). Use as MCPs reais para normalizar medidas, verificar estoque e precificar. Retorne APENAS JSON com estado, resumo e pendencias.",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_1e39e4fe/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-17 00:26:19"
+}

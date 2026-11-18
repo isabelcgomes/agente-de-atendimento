@@ -1,0 +1,33 @@
+{
+  "causa": "Manifesto MCP persistido com 15 ferramentas, sem expiração, divergente das 19 anunciadas pelo servidor.",
+  "cache_antes": 15,
+  "cache_depois": 19,
+  "ferramentas_recuperadas": [
+    "cardapio_adicionar",
+    "cardapio_consultar",
+    "receita_conferir_execucao",
+    "receita_ler_fonte"
+  ],
+  "ttl_ms": 300000,
+  "verificado": {
+    "servidor_configurado_stdio": true,
+    "registro_hermes_sem_plugin": true,
+    "expiracao_cache": true,
+    "testes_aprovados": 31,
+    "fluxo_fonte_e_producao_json_rpc": true,
+    "rede_dos_testes": "simulada",
+    "fonte_nao_lida_bloqueada": true,
+    "fonte_alterada_bloqueada": true
+  },
+  "skill_sha256": "507e2d58ed175137e8e900a65faa01302bd2b7b3c8de432bb83a18f5bc4e23f3",
+  "skill_inalterada": true,
+  "limites": [
+    "Não foi executada conversa com LLM nem busca web real nos testes.",
+    "Não houve recarga ou reinício do gateway em execução; conversas abertas precisam de /reload-mcp.",
+    "Subprocessos continuam com memória RAM independente; utilize a conexão MCP configurada para todas as etapas."
+  ],
+  "reproduzir": [
+    "python3 -m unittest discover -s /home/opc/dona-maria/tests -v",
+    "python3 /home/opc/dona-maria/avaliacao-mcp/atualizar_manifesto.py"
+  ]
+}

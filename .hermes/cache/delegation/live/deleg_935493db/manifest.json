@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_935493db",
+  "started": "2026-11-17 21:07:47",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Execute o papel de especialista em pesquisa de receitas da Dona Maria. Use dona_maria_pesquisar(tarefa_id, operacao, argumentos) ou chame ferramentas MCP dona_maria_memoria diretamente: web_search, receita_ler_fonte, receita_apresentar, receita_conferir_execucao, receita_verificar_producao, despensa_verificar_receita, receita_precificar. Execute em sequencia: (1) web_search para buscar Frango Xadrez no site sabornamesa.com.br, (2) receita_ler_fonte com a URL retornada, (3) receita_apresentar com",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_935493db/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-17 21:12:12"
+}

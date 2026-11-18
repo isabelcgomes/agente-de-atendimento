@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_01764957",
+  "started": "2026-11-17 20:39:12",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Voce e o agente especialista em pesquisa de receitas da Dona Maria. Voce trabalha para o coordenador e nao conversa com a usuario. Use exclusivamente dona_maria_pesquisar(tarefa_id, operacao, argumentos) ou as ferramentas MCP dona_maria_memoria disponiveis. A finalidade e 'execucao': a usuario ja demonstrou interesse na receita recebida. Execute imediatamente operacao=receita_conferir_execucao, argumentos={receita_id: d01807f25ff36ae14e4e215923a5841a}. A ferramenta pesquisa o link exato, rele o ",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_01764957/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-17 20:39:41"
+}

@@ -1,0 +1,8 @@
+/.hermes/.env
+/.hermes/auth.json
+/.hermes/.hermes_history
+/.hermes/backups/
+/.hermes/.curator_backups/
+/.hermes/logs/
+/.hermes/sessions/
+/.hermes/terminal-sessions/

@@ -1,0 +1,35 @@
+{
+  "nome": "Polenta Cremosa com Ragu de Acém",
+  "fonte_url": "https://www.friboi.com.br/receitas/polenta-cremosa-com-ragu-de-carne/",
+  "ingredientes": [
+    "500g de acém (carne de panela) moído",
+    "150g de cebola picada",
+    "1 colher de sopa de alho picado",
+    "2 colheres de sopa de azeite de oliva",
+    "300g de molho de tomate",
+    "1 xícara de água quente",
+    "Sal a gosto",
+    "Pimenta-do-reino a gosto",
+    "2 colheres de sopa de salsinha (cheiro-verde) picada",
+    "1 xícara de fubá (polenta)",
+    "2 xícaras de leite integral quente",
+    "2 xícaras de água quente",
+    "2 colheres de sopa de manteiga",
+    "50g de queijo parmesão ralado"
+  ],
+  "modo_preparo": [
+    "Ragu: Retire a carne da geladeira e deixe em temperatura ambiente por 15 minutos.",
+    "Aqueça uma panela grande em fogo médio com azeite. Refogue a cebola por 2 minutos até ficar translúcida.",
+    "Acrescente o alho e refogue por mais 1 minuto.",
+    "Aumente o fogo, adicione a carne moída e doure por cerca de 5 minutos, mexendo para soltar bem.",
+    "Tempere com sal e pimenta-do-reino a gosto.",
+    "Acrescente o molho de tomate e a água quente. Reduza o fogo, tampe parcialmente e cozinhe por 30 minutos até o molho encorpar.",
+    "Finalize com a salsinha picada e reserve o ragu quente.",
+    "Polenta: Em uma panela funda, aqueça a água e o leite em fogo médio até ferverem.",
+    "Adicione o fubá em fio, mexendo sem parar com um fouet ou colher de pau para evitar grumos.",
+    "Cozinhe em fogo baixo por 20 minutos, mexendo sempre, até a polenta engrossar e soltar do fundo.",
+    "Junte a manteiga e o queijo parmesão ralado. Mexa até ficar homogêneo e cremoso. Acerte o sal.",
+    "Montagem: Sirva a polenta ainda quente em pratos fundos. Cubra com o ragu de carne. Finalize com parmesão ralado e um fio de azeite."
+  ],
+  "rendimento": "4 porções"
+}

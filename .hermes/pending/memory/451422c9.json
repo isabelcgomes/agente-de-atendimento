@@ -1,0 +1,32 @@
+{
+  "id": "451422c9",
+  "subsystem": "memory",
+  "action": "batch",
+  "summary": "background review consolidation (batch on memory): - patch span 'Sabor da Maria fluxo receita: (1) consultar despensa (2) subagente pesquisa (3) orquestrador apresenta + feedback so se gostou (4) veri",
+  "origin": "background_review",
+  "created_at": 1794942047.475918,
+  "payload": {
+    "action": "batch",
+    "target": "memory",
+    "operations": [
+      {
+        "action": "patch",
+        "content": "Sabor da Maria fluxo receita: skill dona-maria-receita cobre todo o fluxo (pesquisa, feedback, producao, verificar receita, CMV/precificacao, salvar). Preco = CMV/0,90 / (1-margem). \"sim\" rejeitado em receita_aprovar.",
+        "old_text": "Sabor da Maria fluxo receita: (1) consultar despensa (2) subagente pesquisa (3) orquestrador apresenta + feedback so se gostou (4) verificar producao (5) checar estoque (6) delegar precificacao ao subagente custos (7) orquestrador estima custos operacionais R$20-30/porcao por tempo+tecnicas+utensilios+valor (8) preco final = (CMV/0,90 + custos_op) / (1 - margem) — 3 cenarios (9) usuario escolhe (10) salvar com 'Autorizo salvar'. CMV cobre so ingredientes. \"sim\" rejeitado em receita_aprovar.",
+        "matched_entry": "Sabor da Maria fluxo receita: (1) consultar despensa (2) subagente pesquisa (3) orquestrador apresenta + feedback so se gostou (4) verificar producao (5) checar estoque (6) delegar precificacao ao subagente custos (7) orquestrador estima custos operacionais R$20-30/porcao por tempo+tecnicas+utensilios+valor (8) preco final = (CMV/0,90 + custos_op) / (1 - margem) — 3 cenarios (9) usuario escolhe (10) salvar com 'Autorizo salvar'. CMV cobre so ingredientes. \"sim\" rejeitado em receita_aprovar."
+      },
+      {
+        "action": "patch",
+        "content": "Massa-volume: molho tomate 1g=1ml, leite 1g=1ml (revisoes 32-33). despensa_verificar_receita nao converte — usar unidade do backend, nao do estoque. oleo_soja estoque L.",
+        "old_text": "Sabor da Maria fluxo receita completo documentado na skill dona-maria-receita. Molho de tomate: 1g = 1ml autorizado (revisao 32-33 memoria). Leite: 1g = 1ml idem. despensa_verificar_receita nao converte massa-volume mesmo com registro na memoria — adaptar receitas para usar ingredientes em unidade compativel com o estoque. oleo_de_soja no estoque em L.",
+        "matched_entry": "Sabor da Maria fluxo receita completo documentado na skill dona-maria-receita. Molho de tomate: 1g = 1ml autorizado (revisao 32-33 memoria). Leite: 1g = 1ml idem. despensa_verificar_receita nao converte massa-volume mesmo com registro na memoria — adaptar receitas para usar ingredientes em unidade compativel com o estoque. oleo_de_soja no estoque em L."
+      },
+      {
+        "action": "patch",
+        "content": "dona_maria_memoria MCP: evidencia em memoria_registrar_lote validada contra state.db. Deve ser substring de UMA mensagem role=user. Concatenar falha com declaracao_real_necessaria. Reset de orcamento bloqueado — nao ha ferramenta para remover historico de compras.",
+        "old_text": "dona_maria_memoria MCP: memoria_registrar_lote valida evidencia contra banco state.db. Evidencia deve ser substring de uma unica mensagem role=user na sessao. Parafraseado ou concatenacao de duas mensagens gera declaracao_real_necessaria. O campo sessao no payload deve bater com o session_id que o Hermes usa no banco.",
+        "matched_entry": "dona_maria_memoria MCP: memoria_registrar_lote valida evidencia contra banco state.db. Evidencia deve ser substring de uma unica mensagem role=user na sessao. Parafraseado ou concatenacao de duas mensagens gera declaracao_real_necessaria. O campo sessao no payload deve bater com o session_id que o Hermes usa no banco."
+      }
+    ]
+  }
+}

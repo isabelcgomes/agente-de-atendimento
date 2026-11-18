@@ -1,0 +1,16 @@
+name: dona-maria-receitas
+version: 2.1.0
+kind: standalone
+description: Coordenador Dona Maria com especialistas Hermes de pesquisa e custos, validações e cardápio autorizado.
+provides_tools:
+  - dona_maria_delegar
+  - dona_maria_agente_resultado
+  - dona_maria_pesquisar
+  - dona_maria_calcular
+provides_hooks:
+  - pre_llm_call
+  - post_tool_call
+  - pre_tool_call
+  - transform_llm_output
+provides_middleware:
+  - llm_request

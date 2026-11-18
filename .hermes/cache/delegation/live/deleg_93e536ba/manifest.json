@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_93e536ba",
+  "started": "2026-11-18 02:28:21",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "1. Verificar se a receita Frango à Parmegiana (receita_id=ad1df4017d701164f7e68b0aedeedc3b, pesquisa_id=zeaIQZ_8GQKHFyko1wH7UNWv) pode ser produzida com o estoque atual. 2. Se sim, calcular CMV e precificar com 3 cenários de margem (10%, 20%, 30%). Use a ferramenta dona_maria_calcular ou, se indisponível, faça o cálculo manual com fallback SQLite direto. Ingredientes do lote (6 porções, 500g frango): farinha de rosca 60g (falta - precisa cotar), queijo parmesão 6g (tem), ovos 2un (tem), molho de",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_93e536ba/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-18 02:28:56"
+}

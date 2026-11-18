@@ -1,0 +1,23 @@
+{
+  "id": "71da65e6",
+  "subsystem": "memory",
+  "action": "batch",
+  "summary": "background review consolidation (batch on memory): - remove: Sabor da Maria: /home/opc/dona-maria. Regras em HERMES.md; MCP dona_maria_memoria em src/. Plugin dona-maria-receitas instalado (ferramenta",
+  "origin": "background_review",
+  "created_at": 1795013155.6652215,
+  "payload": {
+    "action": "batch",
+    "target": "memory",
+    "operations": [
+      {
+        "action": "remove",
+        "old_text": "Sabor da Maria: /home/opc/dona-maria. Regras em HERMES.md; MCP dona_maria_memoria em src/. Plugin dona-maria-receitas instalado (ferramentas: dona_maria_delegar, agente_resultado, pesquisar, calcular — NAO MCP, nao aparecem em tool_search). delegate_task com papeis pesquisa.md/custos.md. Fallback SQLite direto para precificacao/cardapio.",
+        "matched_entry": "Sabor da Maria: /home/opc/dona-maria. Regras em HERMES.md; MCP dona_maria_memoria em src/. Plugin dona-maria-receitas instalado (ferramentas: dona_maria_delegar, agente_resultado, pesquisar, calcular — NAO MCP, nao aparecem em tool_search). delegate_task com papeis pesquisa.md/custos.md. Fallback SQLite direto para precificacao/cardapio."
+      },
+      {
+        "action": "add",
+        "content": "Dona Maria: /home/opc/dona-maria. Plugin dona-maria-receitas (dona_maria_pesquisar, dona_maria_calcular). Fluxo: subagente pesquisa.md pesquisa, MCP apresenta, receita_aprovar aceite, subagente custos.md precifica. NUNCA bypass Python p pesquisa/custos. SQLite so consulta."
+      }
+    ]
+  }
+}

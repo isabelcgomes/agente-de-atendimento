@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_ef7f9cd3",
+  "started": "2026-11-17 19:09:29",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Pesquise uma receita real e deliciosa para sugerir para Dona Maria, proprietária do restaurante Sabor da Maria. A receita deve usar ingredientes que estão em estoque na despensa (listados abaixo). Evite receitas que já foram feitas antes — seja criativo. Busque na web uma receita completa com ingredientes e modo de preparo, depois extraia o conteúdo completo.",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_ef7f9cd3/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-17 19:10:43"
+}

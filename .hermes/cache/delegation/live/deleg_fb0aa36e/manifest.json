@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_fb0aa36e",
+  "started": "2026-11-17 01:42:57",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Calcule CMV e 3 cenarios de preco para Arroz Cremoso de Frango Gratinado (adaptado), 6 porcoes. Use MCP receita_precificar. Retorne JSON.",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_fb0aa36e/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-17 01:44:49"
+}

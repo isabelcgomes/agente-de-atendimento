@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_e3d636c0",
+  "started": "2026-11-17 21:33:29",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "TAREFA_DONA_MARIA: use exclusivamente dona_maria_pesquisar(tarefa_id, operacao, argumentos).\n\nfinalidade=execucao. A usuaria ja aceitou a receita 'Frango ao Molho de Alcaparras' (receita_id: 3d064e99844b820be6e67c272b322c27, pesquisa_id: PChXgKlXSPrvruYUNUvDRadt, fonte_url: https://www.saboresajinomoto.com.br/receita/frango-ao-molho-de-alcaparras). Execute imediatamente operacao=receita_ler_fonte e depois operacao=receita_conferir_execucao com esse receita_id. Nao procure outra receita, nao mude",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_e3d636c0/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-17 21:36:32"
+}

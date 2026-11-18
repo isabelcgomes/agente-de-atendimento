@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_6669d2a1",
+  "started": "2026-11-17 21:30:15",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Siga o papel pesquisa.md e execute o fluxo completo de pesquisa de receita.\n\nTAREFA_DONA_MARIA: use exclusivamente dona_maria_pesquisar(tarefa_id, operacao, argumentos) — não use MCP diretamente.\n\n1. finalidade=receita. A despensa tem: frango (2kg peito), molho de tomate (300g), alcaparras (2000g), cebola, alho, azeite, orégano, sal, pimenta, batata, leite, manteiga. A pesquisa_id da web_search já realizada é \"EsUlnzyonhAs9p-mVYGssk7s\".\n2. Use operacao=web_search com a mesma query 'receita frang",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_6669d2a1/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-17 21:31:26"
+}

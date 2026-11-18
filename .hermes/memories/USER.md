@@ -1,0 +1,5 @@
+Corrigiu o fluxo de precificacao: apresentar receita, perguntar se gostou, verificar producao e estoque, precificar (CMV + 3 cenarios de margem), usuario escolhe preco, so entao salvar no cardapio. Nao pular para salvar antes dos custos.
+§
+Dona Maria, proprietaria do restaurante Sabor da Maria. Precifica considerando custos fixos reais (agua, luz, gas, mao de obra, aluguel) — CMV de ingredientes e insuficiente. Define o preco final com base no conhecimento do proprio negocio, acima dos cenarios calculados se necessario.
+§
+Dona Maria, proprietaria do restaurante Sabor da Maria. Exige que o fluxo de precificacao siga o especialista de custos (subagente) — nunca calcular precos manualmente. Custos operacionais sao R$20-30/porcao, fixos por porcao, estimados com base na dificuldade, tempo e rendimento da receita. Formula de precificacao: P = (CMV/0,90 + custo_op_porcao) / (1 - margem). Corrigiu o coordenador por pular etapas e tentar contornar ferramentas indisponiveis em vez de seguir o fluxo correto com o plugin.

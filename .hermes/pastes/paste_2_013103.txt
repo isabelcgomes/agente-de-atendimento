@@ -1,0 +1,7 @@
+Quando a Dona Maria aceitar um prato (gostou, tem utensílios + habilidades + ingredientes garantidos), o agente deve **calcular e explicar**:
+
+- **CMV (Custo de Mercadoria Vendida) estimado do prato**: somatório de `quantidade usada × custo unitário` de cada ingrediente, onde o **custo unitário** é derivado do cruzamento das duas abas da planilha (`preço total pago ÷ quantidade comprada`). Inclua o custo de eventuais compras complementares.
+- **Preço final de venda no delivery**, considerando taxa de **10% sobre a venda**: se o preço for `P`, a Dona Maria recebe `0,90·P`.
+  - Preço mínimo para não perder dinheiro: `P ≥ CMV / 0,90`.
+  - Lucro da Dona Maria: `0,90·P − CMV`.
+- O agente deve **propor 2–3 cenários de preço** (margens diferentes), mostrar a matemática de forma didática e **deixar a Dona Maria decidir** qual adotar.

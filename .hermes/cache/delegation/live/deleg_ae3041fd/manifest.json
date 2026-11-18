@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_ae3041fd",
+  "started": "2026-11-18 14:46:44",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Pesquise uma receita para a Dona Maria usando exclusivamente `dona_maria_pesquisar(tarefa_id, operacao, argumentos)`. O tarefa_id esta no marcador TAREFA_DONA_MARIA.\n\n1. Escolha uma receita com base nos ingredientes em estoque. Nao pergunte o que ela quer cozinhar.\n2. Use `operacao=web_search, argumentos={query, limit=5}` para buscar.\n3. Leia uma URL retornada com `operacao=receita_ler_fonte, argumentos={pesquisa_id, url}`.\n4. Transcreva a receita completa (ingredientes, modo_preparo, rendimento",
+      "log": "/home/opc/.hermes/cache/delegation/live/deleg_ae3041fd/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-18 14:47:35"
+}

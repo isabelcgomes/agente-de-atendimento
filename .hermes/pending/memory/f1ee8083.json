@@ -1,0 +1,20 @@
+{
+  "id": "f1ee8083",
+  "subsystem": "memory",
+  "action": "batch",
+  "summary": "background review consolidation (batch on memory): - patch span 'Sabor da Maria fluxo receita: (1) consultar despensa (2) subagente pesquisa (3) orquestrador apresenta + feedback so se gostou (4) veri",
+  "origin": "background_review",
+  "created_at": 1794878503.7156293,
+  "payload": {
+    "action": "batch",
+    "target": "memory",
+    "operations": [
+      {
+        "action": "patch",
+        "content": "Sabor da Maria fluxo receita: (1) consultar despensa (2) subagente pesquisa (3) orquestrador apresenta + feedback so se gostou (4) verificar producao (5) checar estoque — backend rastreia linhas pelo texto original, nao remover; massa-volume incompativel (molho tomate) perguntar antes (6) delegar precificacao ao subagente custos (7) orquestrador estima custos operacionais R$20-30/porcao (8) preco final = (CMV/0,90 + custos_op) / (1 - margem) — 3 cenarios (9) usuario escolhe (10) salvar com 'Autorizo salvar'. \"sim\" rejeitado em receita_aprovar.",
+        "old_text": "Sabor da Maria fluxo receita: (1) consultar despensa (2) subagente pesquisa (3) orquestrador apresenta + feedback so se gostou (4) verificar producao (5) checar estoque (6) delegar precificacao ao subagente custos (7) orquestrador estima custos operacionais R$20-30/porcao por tempo+tecnicas+utensilios+valor (8) preco final = (CMV/0,90 + custos_op) / (1 - margem) — 3 cenarios (9) usuario escolhe (10) salvar com 'Autorizo salvar'. CMV cobre so ingredientes. \"sim\" rejeitado em receita_aprovar.",
+        "matched_entry": "Sabor da Maria fluxo receita: (1) consultar despensa (2) subagente pesquisa (3) orquestrador apresenta + feedback so se gostou (4) verificar producao (5) checar estoque (6) delegar precificacao ao subagente custos (7) orquestrador estima custos operacionais R$20-30/porcao por tempo+tecnicas+utensilios+valor (8) preco final = (CMV/0,90 + custos_op) / (1 - margem) — 3 cenarios (9) usuario escolhe (10) salvar com 'Autorizo salvar'. CMV cobre so ingredientes. \"sim\" rejeitado em receita_aprovar."
+      }
+    ]
+  }
+}

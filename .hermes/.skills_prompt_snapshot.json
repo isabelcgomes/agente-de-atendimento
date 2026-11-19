@@ -2,18 +2,18 @@
   "version": 5,
   "manifest": {
     "sabor-da-maria-mcp/SKILL.md": [
-      1795027768922724053,
-      7306,
+      1795113571833743505,
+      2068,
       1128513,
-      1795027768922724053,
-      "70bbd319e75f4732ed56300fc4d3967b"
+      1795113571833743505,
+      "a42be1d6923368a695232f917a2ec1f7"
     ],
     "dona-maria-receita/SKILL.md": [
-      1795027768922724053,
-      15949,
+      1795113571837743580,
+      2222,
       19364087,
-      1795027768922724053,
-      "f3e3ed110b0ed4ba34e1f247e113cf37"
+      1795113571837743580,
+      "17f3bc6527e6e1daee73cd613ab206fb"
     ],
     "social-media/DESCRIPTION.md": [
       1795027768923724071,
@@ -268,11 +268,11 @@
       "f28ae039424e372a07ab6ea484853579"
     ],
     "dona-maria-admin/SKILL.md": [
-      1795027768965724856,
-      6204,
+      1795113571840743636,
+      2966,
       34903616,
-      1795027768965724856,
-      "e724c2fcaea6b68954a9737d290ff8f5"
+      1795113571840743636,
+      "a716e9f41c05b801beeebc3c6574df8e"
     ],
     "software-development/test-driven-development/SKILL.md": [
       1795027768965724856,
@@ -761,7 +761,7 @@
       "category": "dona-maria-admin",
       "frontmatter_name": "dona-maria-admin",
       "rel": "dona-maria-admin/SKILL.md",
-      "description": "Administracao, reset e manutencao dos dados da Dona Maria",
+      "description": "Executar reset, limpeza ou manutenção dos dados do Sabor...",
       "platforms": [],
       "conditions": {
         "fallback_for_toolsets": [],
@@ -777,7 +777,7 @@
       "category": "dona-maria-receita",
       "frontmatter_name": "dona-maria-receita",
       "rel": "dona-maria-receita/SKILL.md",
-      "description": "Proposta proativa de receita com base no estoque, aceite...",
+      "description": "Coordenar sugestões de receitas, validação da cozinha...",
       "platforms": [],
       "conditions": {
         "fallback_for_toolsets": [],
@@ -1118,7 +1118,7 @@
       "category": "sabor-da-maria-mcp",
       "frontmatter_name": "sabor-da-maria-mcp",
       "rel": "sabor-da-maria-mcp/SKILL.md",
-      "description": "Use when registering facts or approving recipes via MCP.",
+      "description": "Consultar e registrar fatos da cozinha e suas evidências...",
       "platforms": [],
       "conditions": {
         "fallback_for_toolsets": [],

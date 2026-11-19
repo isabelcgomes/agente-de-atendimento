@@ -1,0 +1,18 @@
+{
+  "delegation_id": "deleg_ecc89f8f",
+  "started": "2026-11-19 13:45:24",
+  "task_count": 1,
+  "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra",
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Pesquise na internet uma receita SIMPLES que possa ser feita com os ingredientes disponíveis na despensa abaixo. A receita deve usar majoritariamente ingredientes que já estão em estoque. Se faltar algum ingrediente pouco relevante (temperos como sal, pimenta, óleo), sugira substituição por equivalentes da despensa. Não invente medidas. Entregue a receita completa: nome, ingredientes com quantidades e unidades exatas da fonte, modo de preparo em passos numerados, e o link da página de onde a rec",
+      "log": "/home/opc/agente-de-atendimento/.hermes/cache/delegation/live/deleg_ecc89f8f/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed",
+      "model": "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+    }
+  ],
+  "completed": "2026-11-19 13:45:24"
+}

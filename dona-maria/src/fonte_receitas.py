@@ -87,7 +87,7 @@ def parse(html):
     return {'receitas': recipes, 'texto': ''.join(page.parts)[:20000]}
 
 
-def read(url):
+def read_html(url):
     repo = str(Path.home() / '.hermes' / 'hermes-agent')
     if repo not in sys.path:
         sys.path.insert(0, repo)
@@ -106,18 +106,49 @@ def read(url):
                 if size > 2_000_000 or time.monotonic() > deadline:
                     raise ValueError('Página excedeu o limite de tamanho ou tempo')
                 chunks.append(chunk)
-            return parse(b''.join(chunks).decode(response.encoding or 'utf-8', errors='replace'))
+            return b''.join(chunks).decode(response.encoding or 'utf-8', errors='replace')
+
+
+def read(url):
+    return parse(read_html(url))
 
 
 def normalize(text):
     return re.sub(r'\s+', ' ', str(text)).strip().casefold()
 
 
+def presentation_issues(recipe):
+    """Contrato de uma receita completa, sem preencher quantidades ausentes."""
+    if not isinstance(recipe, dict):
+        return ['Receita ausente.']
+    issues = []
+    for field in ['nome', 'fonte_url']:
+        if not isinstance(recipe.get(field), str) or not recipe[field].strip():
+            issues.append('Campo obrigatório ausente: '+field)
+    for field in ['ingredientes', 'modo_preparo']:
+        values = recipe.get(field)
+        if not isinstance(values, list) or not values or not all(isinstance(x,str) and x.strip() for x in values):
+            issues.append('Lista obrigatória incompleta: '+field)
+    ingredients = recipe.get('ingredientes')
+    if isinstance(ingredients, list):
+        for line in ingredients:
+            # Mantém medidas e qualificações literais da fonte, inclusive temperos a gosto.
+            amount = r'\d|[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]|\b(?:um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|meio|meia|a gosto|quanto baste|q\.?b\.?)\b|suficiente para cobrir'
+            if not isinstance(line,str) or not re.search(amount,line,re.I):
+                issues.append('Ingrediente sem quantidade indicada pela fonte: '+str(line))
+    return issues
+
+
 def check(recipe, content):
-    """Exige listas completas da mesma receita, evitando omissões de etapas/requisitos."""
+    """Exige nome e listas completas da mesma receita conferida na fonte."""
+    issues = presentation_issues(recipe)
+    if issues:
+        return False, issues
     if isinstance(content, dict):
         for original in content.get('receitas', []):
-            if all([normalize(x) for x in recipe[field]] == [normalize(x) for x in original[field]]
-                   for field in ['ingredientes', 'modo_preparo']) and normalize(recipe['rendimento']) == normalize(original['rendimento']):
+            if (normalize(recipe['nome']) == normalize(original.get('nome', ''))
+                    and all([normalize(x) for x in recipe[field]] == [normalize(x) for x in original[field]]
+                            for field in ['ingredientes', 'modo_preparo'])
+                    and normalize(recipe['rendimento']) == normalize(original['rendimento'])):
                 return True, []
-    return False, ['Ingredientes e preparo devem corresponder às listas completas de uma receita estruturada da página.']
+    return False, ['Nome, ingredientes e preparo devem corresponder à receita completa da página.']

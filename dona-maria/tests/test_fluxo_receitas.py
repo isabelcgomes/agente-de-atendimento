@@ -16,6 +16,115 @@ import plugin_receitas as plugin
 
 
 class RecipeFlowTests(unittest.TestCase):
+    def test_mcp_compares_recipe_without_asking_conversions_or_calling_measure_tool(self):
+        self.recipe['ingredientes']=['500g de peito de frango','4 batatas médias',
+            '1 caixinha de creme de leite (200g)','1 cebola média','2 dentes de alho','Sal a gosto']
+        self.present()
+        names=['Peito de frango','Batatas médias','Creme de leite','Cebola média','Alho','Sal']
+        ingredients=[{'indice_receita':i,'ingrediente':name,'quantidade':0,'unidade':'a conferir'}
+                     for i,name in enumerate(names)]
+        with patch.object(backend,'consultar_medida',side_effect=AssertionError('Não deve conferir ingredientes individualmente')):
+            result=self.mcp_api('despensa_verificar_receita',receita_id=self.identifier,ingredientes=ingredients)
+        self.assertTrue(result['analise_completa'],result)
+        self.assertEqual(result['pendencias'],[])
+        self.assertEqual({row['ingrediente']:row['necessario'] for row in result['ingredientes']},
+                         {'Peito de frango':'500','Batata':'800','Creme de leite':'200','Cebola':'100','Alho':'4','Sal':'2'})
+
+    def test_missing_prices_are_researched_before_cost_function_can_run(self):
+        self.present();self.facts()
+        self.api('receita_verificar_producao',receita_id=self.identifier,requisitos=self.spec)
+        with self.db:
+            self.db.execute("UPDATE despensa_estoque SET quantidade='50' WHERE ingrediente='Tomate'")
+        ingredients=[{'indice_receita':0,'ingrediente':'Tomate','quantidade':100,'unidade':'g'}]
+        events=[]
+        original=backend.precificacao.calculate
+        def calculate(*args):
+            events.append('calcular')
+            return original(*args)
+        def search(*args):
+            events.append('pesquisar')
+            return {'success':True,'data':{'web':[{'title':'Tomate 500 g','description':'R$ 8,90',
+                                                 'url':'https://example.org/tomate-500g'}]}}
+        with patch.object(backend.precificacao,'calculate',side_effect=calculate), patch.object(backend,'_live_search',side_effect=search):
+            blocked=self.api('receita_precificar',receita_id=self.identifier,ingredientes=ingredients)
+            self.assertEqual(blocked['erro'],'pesquisa_precos_pendente')
+            self.assertEqual(events,[])
+            self.assertEqual(self.api('receita_consultar_fluxo')['etapa'],'pesquisar_faltantes')
+            self.api('preco_pesquisar',receita_id=self.identifier,ingrediente='Tomate')
+            self.api('receita_precificar',receita_id=self.identifier,ingredientes=ingredients)
+        self.assertEqual(events,['pesquisar','calcular'])
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM receita_precificacoes').fetchone()[0],0)
+
+    def test_research_phase_never_launches_costs_in_parallel(self):
+        coordinator=Mock();coordinator.pending.return_value=[]
+        coordinator.start.return_value={'sucesso':True,'tarefa_id':'prices'}
+        state={'message':'continue','delegations':[]}
+        progress={'aceite':True,'etapa':'precificar','receita_id':'r',
+                  'faltantes_precos':[{'ingrediente':'Tomate'}],'pesquisas_precos':[]}
+        with patch.object(plugin,'_coordinator',coordinator):
+            plugin.advance_automatically(state,'test','t',progress)
+            plugin.advance_automatically(state,'test','t',progress)
+        coordinator.start.assert_called_once_with('pesquisa','test','t','continue','r',purpose='precos')
+        self.assertNotIn('costs_task',state)
+
+    def test_price_search_is_not_blocked_by_missing_spice_conversion(self):
+        self.recipe['ingredientes']=['100g de tomate','1 colher de chá de pimenta-da-jamaica']
+        self.present();self.facts()
+        self.api('receita_verificar_producao',receita_id=self.identifier,requisitos=self.spec)
+        self.api('despensa_verificar_receita',receita_id=self.identifier,ingredientes=[
+            {'indice_receita':0,'ingrediente':'Tomate','quantidade':100,'unidade':'g'},
+            {'indice_receita':1,'ingrediente':'pimenta-da-jamaica','quantidade':1,'unidade':'colher de chá'}])
+        progress=self.api('receita_consultar_fluxo')
+        self.assertEqual(progress['etapa'],'pesquisar_faltantes')
+        self.assertEqual(progress['faltantes_precos'][0]['ingrediente'],'pimenta-da-jamaica')
+        coordinator=Mock();coordinator.pending.return_value=[]
+        coordinator.start.return_value={'sucesso':True,'tarefa_id':'prices'}
+        with patch.object(plugin,'_coordinator',coordinator):
+            plugin.advance_automatically({'message':'continue','delegations':[]},'test','price',progress)
+        coordinator.start.assert_called_once_with('pesquisa','test','price','continue',self.identifier,purpose='precos')
+    def test_missing_ingredient_automatically_triggers_price_search_and_preserves_balance(self):
+        self.present(); self.facts()
+        self.api('receita_verificar_producao',receita_id=self.identifier,requisitos=self.spec)
+        with self.db:
+            self.db.execute("UPDATE despensa_estoque SET quantidade='50' WHERE ingrediente='Tomate'")
+        inventory=self.api('despensa_verificar_receita',receita_id=self.identifier,
+                           ingredientes=[{'indice_receita':0,'ingrediente':'Tomate','quantidade':100,'unidade':'g'}])
+        progress=self.api('receita_consultar_fluxo')
+        coordinator=Mock();coordinator.pending.return_value=[]
+        coordinator.start.return_value={'sucesso':True,'tarefa_id':'prices'}
+        state={'message':'Gostei','delegations':[]}
+        with patch.object(plugin,'_coordinator',coordinator):
+            plugin.advance_automatically(state,'test','price-turn',progress)
+            plugin.advance_automatically(state,'test','price-turn',progress)
+        coordinator.start.assert_called_once_with('pesquisa','test','price-turn','Gostei',self.identifier,purpose='precos')
+        before=backend.despensa.budget(self.db)
+        product={'success':True,'data':{'web':[{'title':'Tomate 500 g','description':'R$ 8,90','url':'https://example.org/tomate-500g'}]}}
+        with patch.object(backend,'_live_search',return_value=product) as search:
+            result=self.mcp_api('preco_pesquisar',receita_id=self.identifier,ingrediente='Tomate')
+        self.assertTrue(result['pesquisa_realizada'])
+        self.assertEqual(result['ofertas'][0]['preco_embalagem_BRL'],'8.90')
+        self.assertEqual(result['ofertas'][0]['embalagens'],1)
+        self.assertEqual(backend.despensa.budget(self.db),before)
+        self.assertEqual(self.db.execute("SELECT quantidade FROM despensa_estoque WHERE ingrediente='Tomate'").fetchone()[0],'50')
+        self.assertFalse(result['compra_autorizada'])
+        self.assertEqual(len(self.api('receita_consultar_fluxo')['pesquisas_precos']),1)
+        search.assert_called_once()
+        backend._CANDIDATES.clear();backend._SEARCHES.clear()
+        self.assertEqual(len(self.api('receita_consultar_fluxo')['pesquisas_precos']),1)
+        self.assertIsNotNone(flow.search_for('https://example.org/tomate-500g','test'))
+    def test_literal_grams_are_converted_without_unknown_household_measure(self):
+        for quantity in [1,500]:
+            value=backend.consultar_medida(self.db,'Peito de frango moído','500 g',quantidade=quantity)
+            self.assertTrue(value['sucesso'],value)
+            self.assertEqual(value['quantidade_normalizada'],'500')
+            self.assertEqual(value['unidade'],'g')
+
+    def test_known_water_measure_is_case_insensitive(self):
+        value=backend.consultar_medida(self.db,'água','xícara de chá',quantidade=2)
+        self.assertTrue(value['sucesso'],value)
+        self.assertEqual(value['quantidade_normalizada'],'0.48')
+        self.assertEqual(value['unidade'],'L')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -186,11 +295,13 @@ class RecipeFlowTests(unittest.TestCase):
         self.assertEqual(capacity['perguntas'], [])
         self.assertEqual(self.api('receita_consultar_fluxo')['etapa'], 'normalizar_ingredientes')
 
-    def test_only_unknown_skill_is_asked_then_revalidated(self):
+    def test_pending_validation_resumes_after_confirming_missing_skill(self):
         self.present(); self.facts(missing='cortar')
         capacity = self.api('receita_verificar_producao', receita_id=self.identifier, requisitos=self.spec)
         self.assertEqual(capacity['perguntas'], ['Sabe cortar?'])
         self.assertFalse(capacity['producao_validada'])
+        self.assertFalse(capacity['validacao_concluida'])
+        self.assertEqual(self.api('receita_consultar_fluxo')['etapa'], 'verificar_capacidade')
         self.message('user', 'Sim, sei cortar os ingredientes')
         saved = self.api('memoria_registrar', grupo='habilidades', chave='cortar', valor_json=True,
                          status='confirmado', fonte='dona_maria', evidencia='Sim, sei cortar os ingredientes',
@@ -198,7 +309,22 @@ class RecipeFlowTests(unittest.TestCase):
         self.assertTrue(saved['sucesso'])
         capacity = self.api('receita_verificar_producao', receita_id=self.identifier, requisitos=self.spec)
         self.assertTrue(capacity['producao_validada'])
+        self.assertEqual(capacity['perguntas'], [])
+        self.assertEqual(self.api('receita_consultar_fluxo')['etapa'], 'normalizar_ingredientes')
         self.assertEqual(flow.accepted(self.identifier, 'test')['evidencia'], 'gosto')
+
+    def test_legacy_closed_validation_does_not_block_same_recipe(self):
+        self.present(); self.facts(missing='cortar')
+        capacity = self.api('receita_verificar_producao', receita_id=self.identifier, requisitos=self.spec)
+        legacy = dict(capacity, fluxo_encerrado=True, validacao_concluida=True, perguntas=[])
+        with self.db:
+            self.db.execute('UPDATE producao_validacoes SET resultado_json=?',
+                            (json.dumps(legacy),))
+        self.assertEqual(self.api('receita_consultar_fluxo')['etapa'], 'verificar_capacidade')
+        capacity = self.api('receita_verificar_producao', receita_id=self.identifier, requisitos=self.spec)
+        self.assertEqual(capacity['perguntas'], ['Sabe cortar?'])
+        self.assertNotIn('fluxo_encerrado', capacity)
+        self.assertIn('Sabe cortar?', plugin.render_capacity(capacity))
 
     def test_negative_skill_blocks_pricing(self):
         self.present(); self.facts(negative='cortar')
@@ -243,6 +369,7 @@ class RecipeFlowTests(unittest.TestCase):
         self.present(); self.facts()
         state = {'message': 'gosto', 'delegations': []}
         coordinator = Mock()
+        coordinator.pending.return_value = []
         coordinator.start.return_value = {'sucesso': True, 'tarefa_id': 'costs'}
         with patch.object(plugin, '_coordinator', coordinator):
             plugin.advance_automatically(state, 'test', 'turn', self.api('receita_consultar_fluxo'))
@@ -252,6 +379,20 @@ class RecipeFlowTests(unittest.TestCase):
             plugin.advance_automatically(state, 'test', 'turn', progress)
             plugin.advance_automatically(state, 'test', 'turn', progress)
             coordinator.start.assert_called_once_with('custos', 'test', 'turn', 'gosto', self.identifier)
+
+    def test_followup_reuses_pending_costs_without_revalidating_or_launching_again(self):
+        self.present(); self.facts()
+        self.api('receita_verificar_producao',receita_id=self.identifier,requisitos=self.spec)
+        coordinator=Mock()
+        coordinator.pending.return_value=[{'tarefa_id':'existing','agente':'custos','estado':'RUNNING',
+                                           'receita_id':self.identifier}]
+        with patch.object(plugin,'_coordinator',coordinator), patch.object(
+                backend.producao,'evaluate',side_effect=AssertionError('validação repetida')):
+            for turn in ['first','repeat','repeat-again']:
+                state={'message':'Já confirmei','delegations':[]}
+                plugin.advance_automatically(state,'test',turn,self.api('receita_consultar_fluxo'))
+                self.assertEqual(state['costs_task']['tarefa_id'],'existing')
+            coordinator.start.assert_not_called()
 
     def test_automatic_menu_uses_real_price_consent(self):
         self.present(); self.facts()
@@ -281,6 +422,26 @@ class RecipeFlowTests(unittest.TestCase):
             self.assertTrue(plugin._turns[('test', 'initial-sim')]['automatic_interest'])
         plugin._turns.clear()
 
+    def test_collected_receipt_updates_execution_once_even_without_post_tool_hook(self):
+        self.present('sim'); self.facts()
+        coordinator=Mock(); coordinator.pending.return_value=[]
+        coordinator.collect.return_value={'sucesso':True,'tarefa_id':'execution','estado':'SUCCEEDED',
+            'concluida':True,'eventos':[{'tool_name':'mcp__dona_maria_memoria__receita_conferir_execucao',
+                'args':{'receita_id':self.identifier},'result':self.api('receita_conferir_execucao',receita_id=self.identifier)}]}
+        with patch.object(plugin,'project_session',return_value=True), patch.object(
+                plugin,'call_flow',side_effect=lambda *a:self.api('receita_consultar_fluxo')), patch.object(
+                plugin,'call_execution_check',return_value={'sucesso':True,'tarefa_id':'execution'}), patch.object(
+                plugin,'_coordinator',coordinator):
+            plugin.before_turn(session_id='test',turn_id='receipt',user_message='sim')
+            for _ in range(2):
+                plugin.result_handler({'tarefa_id':'execution'},session_id='test',turn_id='receipt')
+            state=plugin._turns[('test','receipt')]
+            self.assertTrue(state['execution_check']['sucesso'])
+            self.assertEqual(len(state['agent_receipts_seen']),1)
+            self.assertEqual(plugin.before_tool(tool_name='mcp__dona_maria_memoria__receita_verificar_producao',
+                session_id='test',turn_id='receipt')['action'],'modify')
+        plugin._turns.clear()
+
     def test_capacity_hook_launches_costs_in_same_turn(self):
         self.present(); self.facts()
         coordinator = Mock()
@@ -300,7 +461,7 @@ class RecipeFlowTests(unittest.TestCase):
             self.assertIn('costs', request['request']['messages'][-1]['content'])
         plugin._turns.clear()
 
-    def test_memory_answer_hook_resumes_costs_without_new_acceptance(self):
+    def test_memory_answer_allows_revalidation_after_pending_validation(self):
         self.present(); self.facts(missing='cortar')
         self.api('receita_verificar_producao', receita_id=self.identifier, requisitos=self.spec)
         self.message('user', 'Sim, sei cortar os ingredientes')
@@ -311,14 +472,45 @@ class RecipeFlowTests(unittest.TestCase):
              patch.object(plugin, 'call_execution_check', return_value={'sucesso': True, 'tarefa_id': 'execution'}), \
              patch.object(plugin, '_coordinator', coordinator):
             plugin.before_turn(session_id='test', turn_id='answer', user_message='Sim, sei cortar os ingredientes')
+            checked = self.api('receita_conferir_execucao', receita_id=self.identifier)
+            plugin.after_tool(tool_name='mcp__dona_maria_memoria__receita_conferir_execucao',
+                              result=checked, session_id='test', turn_id='answer')
             saved = self.api('memoria_registrar', grupo='habilidades', chave='cortar', valor_json=True,
                              status='confirmado', fonte='dona_maria', evidencia='Sim, sei cortar os ingredientes',
                              revisao_esperada=backend.revision(self.db))
             plugin.after_tool(tool_name='mcp__dona_maria_memoria__memoria_registrar',
                               result=saved, session_id='test', turn_id='answer')
-            coordinator.start.assert_called_once_with('custos', 'test', 'answer',
-                                                       'Sim, sei cortar os ingredientes', self.identifier)
+            coordinator.start.assert_called_once_with('custos', 'test', 'answer', 'Sim, sei cortar os ingredientes', self.identifier)
+            permission = plugin.before_tool(tool_name='mcp__dona_maria_memoria__receita_verificar_producao',
+                args={'receita_id':self.identifier, 'requisitos':self.spec}, session_id='test',turn_id='answer')
+            self.assertNotEqual((permission or {}).get('action'), 'block')
+            capacity = self.api('receita_verificar_producao', receita_id=self.identifier, requisitos=self.spec)
+            plugin.after_tool(tool_name='mcp__dona_maria_memoria__receita_verificar_producao',
+                              result=capacity, session_id='test', turn_id='answer')
+            self.assertTrue(capacity['producao_validada'])
+            coordinator.start.assert_called_once_with('custos', 'test', 'answer', 'Sim, sei cortar os ingredientes', self.identifier)
         plugin._turns.clear()
+
+    def test_successful_validation_is_evaluated_once_and_survives_reconnect(self):
+        from contextlib import closing
+        self.present(); self.facts()
+        with patch.object(backend.producao,'evaluate',wraps=backend.producao.evaluate) as evaluate:
+            first=self.api('receita_verificar_producao',receita_id=self.identifier,requisitos=self.spec)
+            for _ in range(3):
+                again=self.api('receita_verificar_producao',receita_id=self.identifier,requisitos={})
+                self.assertTrue(again['producao_validada'])
+                self.assertTrue(again['validacao_reutilizada'])
+                self.assertEqual(self.api('receita_consultar_fluxo')['etapa'],'normalizar_ingredientes')
+            evaluate.assert_called_once()
+        self.assertTrue(first['validacao_concluida'])
+        with closing(backend.connect(Path(self.tmp.name)/'memory.db')) as reconnected:
+            token=flow.SESSION.set('test')
+            try:
+                with patch.object(backend.producao,'evaluate',side_effect=AssertionError('validação repetida')):
+                    self.assertTrue(backend.producao.validation(reconnected,first['hash_versao'])['producao_validada'])
+                    self.assertIsNone(backend.producao.guard(reconnected,first['hash_versao']))
+            finally:
+                flow.SESSION.reset(token)
 
     def proactive_hooks(self, pantry=None):
         from contextlib import ExitStack

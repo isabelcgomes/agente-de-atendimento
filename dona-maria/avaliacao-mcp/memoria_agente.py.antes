@@ -19,7 +19,7 @@ import producao_receitas as producao
 import precificacao_receitas as precificacao
 import fluxo_receitas as fluxo
 import fonte_receitas as fontes
-DEFAULT_DB = ROOT / 'dados' / 'memoria_dona_maria.sqlite3'
+DEFAULT_DB = ROOT / 'src' / 'dados' / 'memoria_dona_maria.sqlite3'
 GROUPS = ['perfil', 'preferencias', 'equipamentos', 'habilidades', 'operacao',
           'restricoes', 'financeiro', 'decisoes', 'receitas']
 STATUSES = ['confirmado', 'desconhecido', 'revogado']
@@ -31,8 +31,8 @@ _SOURCES = {}
 _RECIPE_WRITE = object()
 CONTEXT = {
     'projeto': 'Sabor da Maria',
-    'conversoes': str(ROOT / 'conversoes_medidas_dona_maria.json'),
-    'despensa_inicial': str(ROOT / 'despensa_dona_maria.xlsx'),
+    'conversoes': str(ROOT / 'src' / 'conversoes_medidas_dona_maria.json'),
+    'despensa_inicial': str(ROOT / 'src' / 'despensa_dona_maria.xlsx'),
 }
 
 

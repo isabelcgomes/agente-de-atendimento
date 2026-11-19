@@ -2823,7 +2823,7 @@
 }
 },
 "https://openrouter.ai/api/v1/models":{
-"ts":1795088532.0249445,
+"ts":1795120229.2324774,
 "caps":{
 "google/gemini-4-neon":{
 "supports_reasoning":true,
@@ -3017,17 +3017,6 @@
 "mandatory":true
 },
 "thinkingmachines/inkling-2-small":{
-"supports_reasoning":true,
-"supported_efforts":[
-"max",
-"high",
-"medium",
-"low",
-"minimal"
-],
-"mandatory":true
-},
-"thinkingmachines/inkling-2-small:free":{
 "supports_reasoning":true,
 "supported_efforts":[
 "max",

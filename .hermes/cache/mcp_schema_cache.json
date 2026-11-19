@@ -582,7 +582,7 @@
       },
       {
         "name": "receita_verificar_producao",
-        "description": "Valide o lote contra fatos confirmados: equipamentos/capacidades, técnicas e operação. Fogão: campo=bocas, minimo necessário. Pergunte pendências.",
+        "description": "Confira uma única vez equipamentos, habilidades e operação com os fatos existentes. O resultado é persistido. Se passar, avance aos custos; se falhar, encerre sem perguntas. Fogão: campo=bocas, minimo necessário.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -624,7 +624,7 @@
                       },
                       "pergunta": {
                         "type": "string",
-                        "description": "Pergunta à Dona Maria para confirmar este requisito, se desconhecido."
+                        "description": "Descrição do requisito para auditoria interna; não repetir perguntas à usuária."
                       }
                     },
                     "required": [
@@ -686,7 +686,7 @@
                       },
                       "pergunta": {
                         "type": "string",
-                        "description": "Pergunta à Dona Maria para confirmar este requisito, se desconhecido."
+                        "description": "Descrição do requisito para auditoria interna; não repetir perguntas à usuária."
                       }
                     },
                     "required": [
@@ -868,8 +868,35 @@
         }
       },
       {
+        "name": "preco_pesquisar",
+        "description": "Pesquise preço anunciado e embalagem de UM ingrediente realmente faltante, com fonte e frete pendente; não compra nem altera saldo.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "receita_id": {
+              "type": "string"
+            },
+            "ingrediente": {
+              "type": "string"
+            },
+            "sessao": {
+              "type": "string",
+              "description": "Identidade da sessão Hermes, preenchida pelo plugin; permite comprovar fontes e aceite do histórico."
+            }
+          },
+          "required": [
+            "receita_id",
+            "ingrediente"
+          ],
+          "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
+        }
+      },
+      {
         "name": "receita_conferir_execucao",
-        "description": "Após interesse no prato, releia o link exato e confira os requisitos na memória; devolva perguntas pendentes.",
+        "description": "Após interesse no prato, confira a fonte e os dados existentes. Reutilize validação concluída; não reabra perguntas de habilidades ou equipamentos.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1006,7 +1033,7 @@
     ],
     "utility_tools": [],
     "ttl_ms": 0,
-    "written_at": 1795088501.5117984,
+    "written_at": 1795114197.850792,
     "cache_scope": "private"
   }
 }

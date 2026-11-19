@@ -18,13 +18,33 @@ ROOT = Path(__file__).resolve().parent
 PREFIX = 'mcp__dona_maria_memoria__'
 TOOLSETS = {'pesquisa': 'dona_maria_pesquisa', 'custos': 'dona_maria_custos'}
 WORK_TOOLS = {'pesquisa': 'dona_maria_pesquisar', 'custos': 'dona_maria_calcular'}
+COST_TOOLS = {'dona_maria_custos_'+op:op for op in
+              ['despensa_verificar_receita', 'receita_precificar']}
 OPERATIONS = {
-    'pesquisa': frozenset(['web_search', 'receita_ler_fonte', 'receita_apresentar', 'receita_conferir_execucao']),
+    'pesquisa': frozenset(['web_search', 'receita_ler_fonte', 'receita_apresentar', 'receita_conferir_execucao', 'preco_pesquisar']),
     'custos': frozenset(['medidas_consultar', 'despensa_verificar_receita', 'receita_precificar']),
 }
 ROUTED = frozenset(PREFIX + op for ops in OPERATIONS.values() for op in ops)
 CONTROL_TOOLS = frozenset(['dona_maria_delegar', 'dona_maria_agente_resultado'])
 TERMINAL = frozenset(['SUCCEEDED', 'FAILED', 'INTERRUPTED', 'CANCELLED', 'UNKNOWN'])
+
+
+def cost_pending_receipts(events):
+    """Somente retornos de negócio comprovados; erros de chamada não são pendências da usuária."""
+    result = {}
+    for event in events:
+        name = event.get('tool_name', '').split('__')[-1]
+        value = event.get('result', {})
+        identity = (name, str(value.get('ingrediente', event.get('args', {}).get('ingrediente', ''))).casefold(),
+                    str(event.get('args', {}).get('medida', '')).casefold())
+        if value.get('sucesso') is True:
+            result.pop(identity, None)
+        if ((name == 'medidas_consultar' and value.get('erro') == 'conversao_indefinida')
+                or (name in ['despensa_verificar_receita', 'receita_precificar']
+                    and value.get('erro') != 'argumentos_invalidos'
+                    and (value.get('pendencias') or value.get('faltantes') or value.get('erro') == 'rendimento_pendente'))):
+            result[identity] = event
+    return list(result.values())
 
 
 class LifecycleProxy:
@@ -113,7 +133,7 @@ class Coordinator:
             return unpack(self.backend(name, args))
 
     def pending(self, owner):
-        return [{'tarefa_id': j['id'], 'agente': j['agente'], 'estado': j['estado']}
+        return [{'tarefa_id': j['id'], 'agente': j['agente'], 'estado': j['estado'], 'receita_id':j.get('receita_id')}
                 for j in self.store.jobs(owner) if not j.get('entregue')]
 
     def start(self, agent, owner, turn, message, recipe_id=None, purpose='receita'):
@@ -135,6 +155,7 @@ class Coordinator:
             if any(j['agente'] == agent and j.get('receita_id') == recipe_id for j in active):
                 return {'sucesso': False, 'erro': 'especialista_em_andamento', 'acao': 'Consulte a tarefa existente antes de iniciar outra.'}
             context = {'pedido_usuario': message[:4000], 'finalidade': purpose}
+            price_targets = []
             if agent == 'pesquisa':
                 pantry = self.call(owner, 'despensa_consultar', {'resumido': True})
                 if not pantry.get('sucesso') or not isinstance(pantry.get('estoque'), list):
@@ -145,16 +166,35 @@ class Coordinator:
                     if not progress.get('sucesso'):
                         return progress
                     context['fluxo'] = progress
+                    if purpose == 'precos':
+                        done = {r['ingrediente'].casefold() for r in progress.get('pesquisas_precos', [])}
+                        price_targets = [r['ingrediente'] for r in progress.get('faltantes_precos', [])
+                                         if r['ingrediente'].casefold() not in done]
+                        context['faltantes_para_pesquisar'] = price_targets
+                        # A próxima consulta precisa só dos faltantes. Recibos de
+                        # preços já concluídos não devem estourar o contexto do filho.
+                        context['despensa'] = {'orcamento':pantry.get('orcamento', {})}
+                        context['fluxo'] = {'receita_id':recipe_id,
+                                            'receita':{'nome':progress.get('receita', {}).get('nome', '')},
+                                            'aceite':bool(progress.get('aceite'))}
+                    elif purpose == 'execucao':
+                        context['fluxo'] = {'receita_id':recipe_id,
+                            'receita':{key:progress.get('receita', {}).get(key) for key in ['nome','fonte_url']}}
             else:
                 progress = self.call(owner, 'receita_consultar_fluxo', {'receita_id': recipe_id})
                 if not progress.get('sucesso'):
                     return progress
                 context['fluxo'] = progress
+                context['fluxo'] = {key:value for key,value in progress.items() if key not in
+                                    ['pesquisas_precos','conferencia_execucao','precificacao','prato_cardapio']}
+                context['fluxo']['receita'] = {key:value for key,value in progress.get('receita', {}).items()
+                                               if key != 'modo_preparo'}
             job = {'id': secrets.token_urlsafe(18), 'token': secrets.token_urlsafe(24),
                    'dono': owner, 'turno': turn, 'chave': key, 'agente': agent,
                    'receita_id': recipe_id, 'estado': 'PENDING', 'eventos': [],
                    'finalidade': purpose,
-                   'criada_em': time.time(), 'prazo': time.time() + self.timeout,
+                   'alvos_precos':price_targets,
+                   'criada_em': time.time(), 'prazo': time.time() + (max(self.timeout, 480) if agent == 'pesquisa' and purpose == 'receita' else max(self.timeout, 420) if purpose == 'precos' else self.timeout),
                    'chamadas': 0, 'buscas': 0, 'falhas': {}, 'entregue': False}
             self.store.put(job)
         try:
@@ -201,22 +241,92 @@ class Coordinator:
             job = self.store.get(self.children.get(session, ''))
         return job['agente'] if job else None
 
+    def child_contract(self, session):
+        with self.lock:
+            job = self.store.get(self.children.get(session, ''))
+        if not job:
+            return None
+        done = {e['result'].get('ingrediente', '').casefold() for e in job['eventos']
+                if e['tool_name'] == PREFIX+'preco_pesquisar' and e['result'].get('pesquisa_realizada')}
+        return {'id':job['id'], 'finalidade':job.get('finalidade'), 'receita_id':job.get('receita_id'),
+                'comparacao_feita':any(e['tool_name'] == PREFIX+'despensa_verificar_receita'
+                                      and e['result'].get('sucesso') for e in job['eventos']),
+                'custos_pendentes':bool(cost_pending_receipts(job['eventos'])) if job['agente']=='custos' else False,
+                'precificacao_feita':any(e['tool_name']==PREFIX+'receita_precificar' and e['result'].get('sucesso') for e in job['eventos']),
+                'alvos_precos':[n for n in job.get('alvos_precos', []) if n.casefold() not in done]}
+
+    def execute_cost(self, session, operation, arguments):
+        with self.lock:
+            job = self.store.get(self.children.get(session, ''))
+        if not job or job['agente'] != 'custos':
+            return {'sucesso':False, 'erro':'especialista_nao_autorizado'}
+        arguments = dict(arguments)
+        if operation != 'medidas_consultar':
+            arguments['receita_id'] = job['receita_id']
+        return self.execute(session, job['id'], operation, arguments)
+
+    def bind_request_child(self, session, messages):
+        """Filhos efêmeros não passam pelo hook pre_llm_call do Hermes."""
+        for message in messages:
+            content = message.get('content', '')
+            if isinstance(content, list):
+                content = '\n'.join(part.get('text', '') for part in content if isinstance(part, dict))
+            match = re.search(r'TAREFA_DONA_MARIA=([\w-]+) TOKEN=([\w-]+)', str(content))
+            if match:
+                job = self.store.get(match[1])
+                if job:
+                    role = self.bind_child(session, job['dono'], content)
+                    if role:
+                        return role
+        return None
+
+    def call_limit(self, job):
+        return max(self.max_calls, 96) if job['agente'] == 'pesquisa' and job.get('finalidade') == 'receita' else self.max_calls
+
     def child_exhausted(self, session):
         with self.lock:
             job = self.store.get(self.children.get(session, ''))
         return not job or (job['estado'] in TERMINAL or job['estado'] == 'CANCEL_REQUESTED'
-                           or time.time() > job['prazo'] or job['chamadas'] >= self.max_calls
-                           or any(count >= 2 for count in job['falhas'].values()))
+                           or time.time() > job['prazo'] or job['chamadas'] >= self.call_limit(job))
 
-    def execute(self, session, identifier, operation, arguments):
+    def child_needs_work(self, session):
+        """Um resumo livre não substitui a busca, leitura e apresentação comprovadas."""
+        if self.child_exhausted(session):
+            return False
+        with self.lock:
+            job = self.store.get(self.children.get(session, ''))
+        if job['agente'] == 'custos' and cost_pending_receipts(job['eventos']):
+            return False
+        if job.get('finalidade') == 'precos':
+            done = {e.get('result', {}).get('ingrediente', '').casefold() for e in job['eventos']
+                    if e.get('tool_name') == PREFIX+'preco_pesquisar' and e.get('result', {}).get('pesquisa_realizada')}
+            return any(name.casefold() not in done for name in job.get('alvos_precos', []))
+        expected = ('receita_conferir_execucao' if job.get('finalidade') == 'execucao' else
+                    'web_search' if job.get('finalidade') == 'precos' else
+                    'receita_apresentar' if job['agente'] == 'pesquisa' else 'receita_precificar')
+        return not any(event.get('tool_name') == PREFIX+expected and event.get('result', {}).get('sucesso')
+                       and (expected != 'receita_apresentar' or event['result'].get('fonte_conferida') is True)
+                       for event in job['eventos'])
+
+    def execute(self, session, identifier, operation, arguments, _recover=True):
         with self.lock:
             job = self.store.get(identifier)
             if not job or self.children.get(session) != identifier:
                 return {'sucesso': False, 'erro': 'especialista_nao_autorizado'}
             if operation not in OPERATIONS[job['agente']]:
                 return {'sucesso': False, 'erro': 'operacao_fora_do_papel'}
-            if job.get('finalidade') == 'precos' and operation != 'web_search':
+            if job.get('finalidade') == 'precos' and operation not in ['web_search', 'preco_pesquisar']:
                 return {'sucesso': False, 'erro': 'cotacao_so_pesquisa_precos'}
+            if operation == 'preco_pesquisar' and (not isinstance(arguments, dict) or job.get('finalidade') != 'precos'
+                    or arguments.get('receita_id') != job.get('receita_id')
+                    or arguments.get('ingrediente', '').casefold() not in [n.casefold() for n in job.get('alvos_precos', [])]):
+                return {'sucesso':False,'erro':'preco_fora_do_contrato'}
+            if operation == 'preco_pesquisar':
+                prior = next((e['result'] for e in job['eventos'] if e['tool_name'] == PREFIX+operation
+                              and e['result'].get('ingrediente', '').casefold() == arguments.get('ingrediente', '').casefold()
+                              and e['result'].get('pesquisa_realizada')), None)
+                if prior:
+                    return prior
             if job.get('finalidade') == 'execucao' and (operation != 'receita_conferir_execucao' or not isinstance(arguments, dict) or arguments.get('receita_id') != job['receita_id']):
                 return {'sucesso': False, 'erro': 'conferencia_exige_receita_escolhida'}
             if operation == 'receita_conferir_execucao' and job.get('finalidade') != 'execucao':
@@ -229,7 +339,8 @@ class Coordinator:
                 return {'sucesso': False, 'erro': 'receita_de_outra_tarefa'}
             if 'evidencia_aceite' in arguments:
                 return {'sucesso': False, 'erro': 'aceite_deve_vir_do_historico_real'}
-            if job['chamadas'] >= self.max_calls or operation in ['web_search', 'receita_conferir_execucao'] and job['buscas'] >= 4:
+            search_limit = 12 if job['agente'] == 'pesquisa' and job.get('finalidade') == 'receita' else 4
+            if job['chamadas'] >= self.call_limit(job) or operation in ['web_search', 'receita_conferir_execucao'] and job['buscas'] >= search_limit:
                 return {'sucesso': False, 'erro': 'limite_do_especialista'}
             signature = json.dumps([operation, arguments], sort_keys=True)
             if job['falhas'].get(signature, 0) >= 2:
@@ -242,11 +353,73 @@ class Coordinator:
             job = self.store.get(identifier)
             if result.get('sucesso') is not True:
                 job['falhas'][signature] = job['falhas'].get(signature, 0) + 1
-            # Só estes recibos são úteis ao coordenador; páginas completas ficam no MCP.
-            if operation not in ['receita_ler_fonte', 'medidas_consultar']:
+            # Guarde o diagnóstico das fontes, sem carregar páginas inteiras no contexto.
+            if operation == 'receita_ler_fonte':
+                job.setdefault('fontes_tentadas', {})[arguments['url']] = {
+                    key:result[key] for key in ['sucesso', 'erro', 'detalhe'] if key in result}
+            else:
                 job['eventos'].append({'tool_name': PREFIX + operation, 'args': arguments, 'result': result})
             self.store.put(job)
+        if (operation == 'web_search' and _recover
+                and job['agente'] == 'pesquisa' and job.get('finalidade', 'receita') == 'receita'):
+            return self.recover_recipe_search(session, identifier, arguments, result)
         return result
+
+    def recover_recipe_search(self, session, identifier, arguments, result):
+        """Uma fonte inválida descarta o link, nunca toda a pesquisa."""
+        query = arguments.get('query', '')
+        sites = ['tudogostoso.com.br', 'receiteria.com.br', 'receitasnestle.com.br',
+                 'panelinha.com.br', 'receitas.globo.com', 'tudoreceitas.com',
+                 'anamariabraga.globo.com', 'guiadacozinha.com.br',
+                 'comidinhasdochef.com', 'acozinhalegal.com.br', 'terra.com.br']
+        while not self.child_exhausted(session):
+            if result.get('sucesso'):
+                candidate = self.read_search_recipe(session, identifier, result)
+                if candidate:
+                    return dict(result, receita_validada=candidate,
+                                proximo_passo='Uma receita completa já foi lida e validada. Encerre a tarefa sem pesquisar outras opções.')
+            job = self.store.get(identifier)
+            if job['buscas'] >= 12 or self.child_exhausted(session):
+                break
+            site = sites[min(max(job['buscas'] - 1, 0), len(sites) - 1)]
+            refined = dict(arguments, query=query + ' ingredientes modo de preparo site:' + site, limit=5)
+            result = self.execute(session, identifier, 'web_search', refined, _recover=False)
+        return dict(result, pesquisa_esgotada=True,
+                    acao='As fontes consultadas não forneceram uma receita validada dentro do prazo de pesquisa. Não invente ingredientes ou preparo.',
+                    fontes_tentadas=self.store.get(identifier).get('fontes_tentadas', {}))
+
+    def read_search_recipe(self, session, identifier, search):
+        """Transcreve o Recipe estruturado diretamente, sem reconstrução pelo LLM."""
+        payload = search.get('resultado_web', {})
+        rows = payload.get('data', {}).get('web', [])
+        seen = set()
+        restrictions = re.findall(r'^NUNCA APRESENTE UMA RECEITA DE (.+)$',
+                                  (ROOT / 'agentes' / 'pesquisa.md').read_text(), re.M | re.I)
+        for row in rows:
+            url = row.get('url')
+            tried = self.store.get(identifier).get('fontes_tentadas', {})
+            if not url or url in seen or url in tried or self.child_exhausted(session):
+                continue
+            seen.add(url)
+            source = self.execute(session, identifier, 'receita_ler_fonte',
+                                  {'pesquisa_id':search['pesquisa_id'], 'url':url})
+            if source.get('sucesso') is not True:
+                continue
+            for recipe in source.get('conteudo', {}).get('receitas', []):
+                description = ' '.join([recipe.get('nome', '')] + recipe.get('ingredientes', [])).casefold()
+                if any(term.strip().rstrip('.').casefold() in description for term in restrictions):
+                    continue
+                if re.search(r'\bou\b|\b(?:opções|opcoes|versões|versoes)\b', str(recipe.get('nome', '')), re.I):
+                    # Uma página com versões alternativas de pratos não é uma única sugestão.
+                    continue
+                # Use as listas integrais retornadas pela fonte já lida no MCP.
+                value = {key:recipe.get(key) for key in ['nome', 'ingredientes', 'modo_preparo']}
+                value.update(fonte_url=url, rendimento=recipe.get('rendimento') or 'não informado')
+                receipt = self.execute(session, identifier, 'receita_apresentar',
+                                       {'pesquisa_id':search['pesquisa_id'], 'receita':value})
+                if receipt.get('sucesso') is True and receipt.get('fonte_conferida') is True:
+                    return receipt
+        return None
 
     def collect(self, owner, identifier, wait=0, cancel=False):
         job = self.store.get(identifier, owner)
@@ -300,16 +473,27 @@ class Coordinator:
             receipts = job['eventos']
             expected = 'receita_apresentar' if job['agente'] == 'pesquisa' else 'receita_precificar'
             if job.get('finalidade') == 'precos':
-                expected = 'web_search'
+                expected = 'preco_pesquisar'
             elif job.get('finalidade') == 'execucao':
                 expected = 'receita_conferir_execucao'
             proved = any(e['tool_name'] == PREFIX + expected and e['result'].get('sucesso')
                          and (expected != 'receita_apresentar' or e['result'].get('fonte_conferida')) for e in receipts)
-            success = status == 'SUCCEEDED' and valid and proved
-            answer = {'sucesso': success, 'tarefa_id': identifier, 'agente': job['agente'],
+            if job.get('finalidade') == 'precos':
+                names = {e['result'].get('ingrediente', '').casefold() for e in receipts
+                         if e['tool_name'] == PREFIX+expected and e['result'].get('pesquisa_realizada')}
+                proved = bool(names) and all(n.casefold() in names for n in job.get('alvos_precos', []))
+            # O recibo determinístico comprova o trabalho; a formatação do resumo
+            # livre não pode invalidar uma receita já conferida na fonte.
+            success = status == 'SUCCEEDED' and proved
+            pending = status == 'SUCCEEDED' and job['agente'] == 'custos' and bool(cost_pending_receipts(receipts)) and not success
+            answer = {'sucesso': success or pending, 'tarefa_id': identifier, 'agente': job['agente'],
                       'estado': status, 'concluida': True, 'eventos': receipts,
                       'resultado_validado': success, 'uso': result.get('usage_metadata', {})}
-            if not success:
+            answer['pendencia_validada'] = pending
+            answer['resumo_estruturado'] = valid
+            if result.get('error_message'):
+                answer['diagnostico_execucao'] = result['error_message']
+            if not success and not pending:
                 answer['erro'] = 'especialista_sem_resultado_validado'
                 answer['acao'] = 'Use somente as pendências dos recibos MCP. Sem comprovante, não apresente receita/preço como concluídos.'
             job.update(estado=status, entregue=True, resultado=answer)

@@ -17,21 +17,20 @@ def ceiling(value):
 
 def cost_basis(db):
     """Cruza Despensa/Precos originais e acrescenta só compras efetivamente registradas."""
-    rules = {x['ingrediente']:x['normalizacao_estoque'] for x in pantry.conversion_data()['ingredientes_despensa']}
-    prices = {x[0]:x for x in pantry.rows_xlsx(pantry.ROOT/'despensa_dona_maria.xlsx',2)}
+    prices = {pantry.key(pantry.canonical(x[0])):x for x in pantry.rows_xlsx(pantry.ROOT/'despensa_dona_maria.xlsx',2)}
     basis = {}
     for name, quantity, unit in pantry.rows_xlsx(pantry.ROOT/'despensa_dona_maria.xlsx',1):
-        price = prices[name]
-        if price[2] != unit: raise ValueError('Unidades incompatíveis nas abas para '+name)
-        factor = pantry.number(rules[name]['fator'],True)
-        bought = pantry.number(price[1],True)*factor
+        name = pantry.canonical(name)
+        price = prices[pantry.key(name)]
+        qty, normalized, _ = pantry.normalize(name,quantity,unit)
+        bought, bought_unit, _ = pantry.normalize(name,pantry.number(price[1],True),price[2])
+        if bought_unit != normalized: raise ValueError('Unidades incompatíveis nas abas para '+name)
         paid = pantry.number(price[3]).quantize(CENT)
-        qty = pantry.number(quantity)*factor
         unit_cost = paid/bought
         basis[pantry.key(name)] = {'quantidade':qty,'custo':qty*unit_cost,
-            'unidade':rules[name]['unidade_destino'], 'origens':[{
+            'unidade':normalized, 'origens':[{
                 'origem':'planilha: Despensa × Precos','quantidade_em_estoque':str(qty),
-                'quantidade_comprada':str(bought),'unidade':rules[name]['unidade_destino'],
+                'quantidade_comprada':str(bought),'unidade':normalized,
                 'preco_total_pago_BRL':money(paid),'custo_unitario_BRL':str(unit_cost)}]}
     for purchase in db.execute('SELECT c.id,q.itens_json,q.frete_centavos FROM despensa_compras c JOIN despensa_cotacoes q ON q.id=c.cotacao_id ORDER BY c.registrado_em,c.id'):
         items=json.loads(purchase['itens_json'])
@@ -62,6 +61,8 @@ def calculate(db, analysis, porcoes):
     bases=cost_basis(db)
     rows=[];total=Decimal(0)
     for item in analysis['ingredientes']:
+        if item.get('recurso_operacional') or pantry.number(item['necessario']) == 0:
+            continue
         base=bases.get(pantry.key(item['ingrediente']))
         stock=pantry.stock(db,item['ingrediente'])
         if not base or base['quantidade']<=0 or not stock or base['unidade']!=item['unidade'] or base['quantidade']!=pantry.number(stock['quantidade']):
@@ -90,5 +91,5 @@ def calculate(db, analysis, porcoes):
             'preco_minimo_por_porcao_BRL':money(minimum), 'preco_minimo_lote_BRL':money(ceiling(total/(1-TAXA))),
             'cenarios':scenarios,'preco_escolhido':None,
             'metodo':'Custo unitário inicial = preço total pago ÷ quantidade comprada normalizada das abas Precos/Despensa. Compras complementares autorizadas entram no custo médio ponderado, com frete rateado. CMV = soma de quantidade usada × custo unitário, sem arredondamentos intermediários.',
-            'limites':'Lucro estimado após ingredientes e taxa de delivery. Não inclui mão de obra, energia/gás, embalagens de entrega, impostos ou outras despesas não informadas. Custo de compra de embalagem inteira é diferente do custo da fração usada.',
+            'limites':'Lucro estimado após ingredientes e taxa de delivery. Água de preparo é recurso operacional e não uma compra de água engarrafada. Não inclui água de serviço, mão de obra, energia/gás, embalagens de entrega, impostos ou outras despesas não informadas. Custo de compra de embalagem inteira é diferente do custo da fração usada.',
             'acao':'Explique cada custo e as fórmulas P mínimo = CMV/0,90 e lucro = 0,90×P−CMV. Mostre os três cenários e pergunte qual preço Dona Maria quer adotar. Não escolha por ela. Calcular não baixa estoque, não altera orçamento nem define preço.'}

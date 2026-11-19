@@ -29,6 +29,9 @@ def fluxo_curto(data):
     if data.get('conferencia_execucao'):
         result['conferencia_execucao'] = data['conferencia_execucao']
         result['receita']['modo_preparo'] = recipe.get('modo_preparo', [])
+    for field in ['faltantes_precos','pesquisas_precos']:
+        if data.get(field):
+            result[field] = data[field]
     normalization=data.get('normalizacao',{})
     if normalization.get('pendencias'):
         result['pendencias']=normalization['pendencias']

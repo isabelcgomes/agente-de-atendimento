@@ -86,7 +86,8 @@ plugins:
 model:
   # Default model to use (can be overridden with --model flag)
   # Both "default" and "model" work as the key name here.
-  default: "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+  # default: "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+  default: "meta-llama/Llama-4-Maverick-17B-128E-Instruct"
 
   # Inference provider selection:
   #   "auto"         - Auto-detect from credentials (default)

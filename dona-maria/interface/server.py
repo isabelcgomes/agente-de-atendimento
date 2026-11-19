@@ -52,7 +52,7 @@ def storage():
 
 def history(conversation):
     with closing(storage()) as db:
-        return [dict(r) for r in db.execute('SELECT role,text,created FROM messages WHERE conversation=? ORDER BY id', (conversation,))]
+        return [dict(r) for r in db.execute("SELECT role,text,created FROM messages WHERE conversation=? AND role IN ('user','assistant','error') ORDER BY id", (conversation,))]
 
 
 def append(conversation, role, text):
@@ -170,67 +170,227 @@ def snapshot():
         state['arquivo'] = last['name'] if last else 'despensa_dona_maria.xlsx'
         state['estoque_substituido'] = bool(last)
     state['consultado_em'] = stamp()
+    state['interface_version'] = 'progress-v1'
     state['hermes_disponivel'] = bool(shutil.which('hermes'))
     return state
 
 
+TOOL_LABELS = {
+    'despensa_consultar': 'Consultando ingredientes e orçamento da despensa',
+    'memoria_consultar': 'Consultando as informações da sua cozinha',
+    'dona_maria_delegar': 'Iniciando um especialista',
+    'dona_maria_agente_resultado': 'Aguardando o resultado do especialista',
+    'web_search': 'Pesquisando fontes na internet',
+    'receita_ler_fonte': 'Conferindo a receita na fonte',
+    'receita_apresentar': 'Validando ingredientes e modo de preparo',
+    'receita_verificar_producao': 'Conferindo equipamentos e habilidades',
+    'receita_precificar': 'Calculando custos e cenários de preço',
+    'preco_pesquisar': 'Pesquisando preços dos ingredientes faltantes',
+    'cardapio_adicionar': 'Atualizando o cardápio',
+}
+TASK_TERMINAL = {'SUCCEEDED', 'FAILED', 'CANCELLED', 'INTERRUPTED', 'UNKNOWN'}
+
+
+def progress(job, text, key=None):
+    with STATE_LOCK:
+        key = key or uuid.uuid4().hex
+        if key in job.setdefault('_seen', []):
+            return
+        job['_seen'].append(key)
+        event = {'text': text, 'created': stamp()}
+        job.setdefault('progress', []).append(event)
+        job['activity'] = text
+        job['updated_at'] = event['created']
+
+
+def task_snapshot(session):
+    path = SOURCE / 'dados' / 'tarefas_agentes.sqlite3'
+    if not session or not path.exists():
+        return []
+    with closing(sqlite3.connect(path.resolve().as_uri()+'?mode=ro', uri=True, timeout=2)) as db:
+        return [json.loads(row[0]) for row in db.execute('SELECT dados FROM tarefas WHERE dono=? ORDER BY rowid', (session,))]
+
+
+def observe_tasks(job):
+    tasks = task_snapshot(job.get('session'))
+    for task in tasks:
+        # Resultados antigos já entregues não pertencem a esta interação.
+        if task.get('entregue') and task.get('criada_em', 0) < job['started_at']:
+            continue
+        ident, state = task['id'], task.get('estado', 'PENDING')
+        agent = {'pesquisa': 'Pesquisa', 'custos': 'Custos'}.get(task.get('agente'), 'Especialista')
+        label = {'PENDING':'tarefa recebida', 'RUNNING':'trabalhando', 'CANCEL_REQUESTED':'cancelamento solicitado',
+                 'FAILED':'execução falhou', 'CANCELLED':'tarefa cancelada', 'INTERRUPTED':'tarefa interrompida',
+                 'UNKNOWN':'não foi possível confirmar a execução'}.get(state)
+        if label:
+            progress(job, agent+' — '+label, 'task:'+ident+':'+state)
+        for index, event in enumerate(task.get('eventos', [])):
+            name = event.get('tool_name', '').split('__')[-1]
+            result = event.get('result', {})
+            label = TOOL_LABELS.get(name, 'Conferindo resultado do especialista')
+            progress(job, agent+' — '+label+(' · concluído' if result.get('sucesso') else ' · pendência encontrada'),
+                     'receipt:'+ident+':'+str(index))
+        result = task.get('resultado', {})
+        if task.get('entregue'):
+            valid = result.get('resultado_validado') is True
+            label = (' — resultado recebido e validado' if valid else
+                     ' — aguardando dados para precificar' if result.get('pendencia_validada') else
+                     ' — terminou com pendências; resultado não validado')
+            progress(job, agent+label,
+                     'delivered:'+ident)
+        elif state == 'SUCCEEDED':
+            progress(job, agent+' — execução encerrada; aguardando validação do Hermes', 'task:'+ident+':finished')
+    return tasks
+
+
+def run_chat_turn(job, text, deadline):
+    command = ['hermes', 'chat', '-q', text, '--format', 'stream-json']
+    if job.get('session'):
+        command += ['--resume', job['session']]
+    env = dict(os.environ, HERMES_HOME=str(HERMES_HOME), NO_COLOR='1', PYTHONDONTWRITEBYTECODE='1')
+    process = subprocess.Popen(command, cwd=str(SOURCE), env=env, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, text=True, bufsize=1, start_new_session=True)
+    def session_received(session):
+        with STATE_LOCK:
+            job['session'] = session
+            with closing(storage()) as db, db:
+                db.execute('INSERT OR REPLACE INTO conversations VALUES(?,?)', (job['conversation'], session))
+    def diagnostics():
+        # O CLI anuncia a sessão antes da primeira resposta; necessário para acompanhar os filhos.
+        for line in process.stderr:
+            match = re.match(r'(?:Session:|session_id:)\s+(\S+)', line.strip())
+            if match:
+                session_received(match[1])
+    reader = threading.Thread(target=diagnostics, daemon=True)
+    reader.start()
+    def stop():
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    watchdog = threading.Timer(max(0.1, deadline-time.monotonic()), stop)
+    watchdog.start()
+    terminal = None
+    try:
+        for line in process.stdout:
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if event.get('session_id'):
+                session_received(event['session_id'])
+            kind = event.get('type')
+            if kind == 'text':
+                with STATE_LOCK:
+                    job['text'] += event.get('text', '')
+            elif kind in ('tool_use', 'tool_result'):
+                name = event.get('name', '').split('__')[-1]
+                label = TOOL_LABELS.get(name, 'Executando uma etapa do Hermes')
+                if kind == 'tool_result':
+                    label += ' · '+('pendência encontrada' if event.get('is_error') else 'retorno recebido')
+                progress(job, label)
+            elif kind == 'result':
+                terminal = event
+        code = process.wait()
+        reader.join(timeout=2)
+        if code or not terminal or terminal.get('exit_code'):
+            raise RuntimeError('O Hermes não concluiu a resposta. Acompanhe as etapas acima e confira a configuração do agente antes de repetir a ação.')
+        return terminal.get('text') or job['text']
+    finally:
+        watchdog.cancel()
+        if process.poll() is None:
+            stop()
+        process.stdout.close()
+        reader.join(timeout=2)
+        if not reader.is_alive():
+            process.stderr.close()
+
+
 def chat_worker(job_id, conversation, text):
+    from plugin_receitas import wants_recipe, complete_candidate, render_candidate
+    recipe_request = wants_recipe(text)
     job = JOBS[job_id]
-    process = None
+    job.update(conversation=conversation, started_at=time.time(), progress=[], _seen=[])
+    finished = threading.Event()
+    def monitor():
+        while not finished.is_set():
+            try:
+                observe_tasks(job)
+            except (sqlite3.Error, ValueError, OSError):
+                # Uma indisponibilidade na leitura de progresso não prova falha do especialista.
+                pass
+            finished.wait(1)
+    watcher = threading.Thread(target=monitor, daemon=True)
     try:
         append(conversation, 'user', text)
         with closing(storage()) as db:
             row = db.execute('SELECT session FROM conversations WHERE id=?', (conversation,)).fetchone()
-        command = ['hermes', 'chat', '-q', text, '--format', 'stream-json']
         if row and row['session']:
-            command += ['--resume', row['session']]
-        env = dict(os.environ, HERMES_HOME=str(HERMES_HOME), NO_COLOR='1')
-        with tempfile.TemporaryFile(mode='w+') as errors:
-            process = subprocess.Popen(command, cwd=str(SOURCE), env=env, stdout=subprocess.PIPE,
-                                       stderr=errors, text=True, bufsize=1, start_new_session=True)
-            def stop():
-                try:
-                    os.killpg(process.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-            watchdog = threading.Timer(600, stop)
-            watchdog.start()
-            terminal = None
-            try:
-                for line in process.stdout:
-                    try:
-                        event = json.loads(line)
-                    except ValueError:
-                        continue
-                    with STATE_LOCK:
-                        if event.get('session_id'):
-                            with closing(storage()) as db, db:
-                                db.execute('INSERT OR REPLACE INTO conversations VALUES(?,?)', (conversation, event['session_id']))
-                        if event.get('type') == 'text':
-                            job['text'] += event.get('text', '')
-                        elif event.get('type') == 'tool_use':
-                            job['activity'] = 'Consultando ' + event.get('name', 'ferramenta').split('__')[-1]
-                        elif event.get('type') == 'result':
-                            terminal = event
-                code = process.wait()
-            finally:
-                watchdog.cancel()
-            if code or not terminal or terminal.get('exit_code'):
-                raise RuntimeError('O Hermes não concluiu a resposta. Confira a configuração e os logs locais do agente. A conversa foi preservada; consulte o estado antes de repetir uma ação.')
-            answer = terminal.get('text') or job['text']
-            if not answer:
-                raise RuntimeError('O Hermes encerrou sem uma resposta de texto.')
-            append(conversation, 'assistant', answer)
+            job['session'] = row['session']
+        progress(job, 'Hermes recebeu sua mensagem e está preparando a execução')
+        watcher.start()
+        deadline = time.monotonic()+600
+        for attempt in range(20):
+            answer = run_chat_turn(job, text, deadline)
+            tasks = observe_tasks(job)
+            pending = [t for t in tasks if not t.get('entregue')]
+            unsafe = [t for t in pending if t.get('estado') in {'UNKNOWN','CANCELLED','INTERRUPTED','FAILED'}]
+            if unsafe:
+                raise RuntimeError('O especialista encerrou com uma pendência de execução. O resultado precisa ser conferido; nenhuma tarefa foi reiniciada automaticamente.')
+            failed = [t for t in tasks if t.get('criada_em',0)>=job['started_at'] and t.get('entregue')
+                      and t.get('resultado',{}).get('resultado_validado') is False
+                      and not t.get('resultado',{}).get('pendencia_validada')]
+            current = [t for t in tasks if t.get('criada_em', 0)>=job['started_at'] and t.get('entregue')]
+            candidates = [event.get('result', {}) for task in current
+                          if task.get('agente') == 'pesquisa' and task.get('finalidade', 'receita') == 'receita'
+                          for event in task.get('eventos', [])
+                          if event.get('tool_name', '').split('__')[-1] == 'receita_apresentar'
+                          and event.get('result', {}).get('sucesso') is True
+                          and complete_candidate(event.get('result', {}))]
+            if not pending:
+                if recipe_request and candidates:
+                    answer = render_candidate(candidates[0])
+                elif failed:
+                    recovered = all(any(t.get('agente') == f.get('agente')
+                                        and t.get('finalidade', 'receita') == f.get('finalidade', 'receita')
+                                        and t.get('receita_id') == f.get('receita_id')
+                                        and t.get('criada_em', 0) >= f.get('criada_em', 0)
+                                        and t.get('resultado', {}).get('resultado_validado') is True
+                                        for t in current) for f in failed)
+                    if not recovered:
+                        raise RuntimeError('Não foi possível obter uma receita completa com ingredientes, quantidades e preparo conferidos na fonte.' if recipe_request else
+                                           'Não foi possível concluir esta etapa. Confira as pendências indicadas no acompanhamento.')
+            if not pending:
+                break
+            if time.monotonic() >= deadline or attempt == 19:
+                raise RuntimeError('O acompanhamento atingiu o limite de tempo. Ainda há tarefa pendente; confira seu estado antes de iniciar outra.')
+            progress(job, 'O especialista ainda tem uma tarefa pendente. Hermes vai recolher o resultado e continuar.',
+                     'continuation:'+str(attempt))
+            # Continua a MESMA sessão e recolhe apenas contratos existentes. Não cria aceite fictício.
+            text = ('Atualização automática de acompanhamento da interface, sem nova decisão da usuária. '
+                    'Recolha somente as tarefas existentes com dona_maria_agente_resultado(aguardar_segundos=10): '
+                    + ', '.join(t['id'] for t in pending) + '. Não relance especialistas. '
+                    'Continue a etapa com recibos reais. Não autorize compras, preços ou inclusão de pratos '
+                    'com base nesta atualização. Preserve as autorizações reais anteriores; peça à usuária qualquer decisão que faltar.')
             with STATE_LOCK:
-                job.update(status='done', text=answer, activity='Concluído')
+                job['text'] = ''
+            finished.wait(2)
+        if not answer:
+            raise RuntimeError('O Hermes encerrou sem uma resposta de texto.')
+        append(conversation, 'assistant', answer)
+        progress(job, 'Hermes concluiu esta etapa da conversa')
+        with STATE_LOCK:
+            job.update(status='done', text=answer, activity='Etapa concluída')
     except Exception as exc:
-        message = str(exc) if isinstance(exc, RuntimeError) else 'Não foi possível iniciar o Hermes. Verifique a instalação local.'
+        message = str(exc) if isinstance(exc, RuntimeError) else 'Não foi possível acompanhar o Hermes. Confira o estado da tarefa antes de repetir a solicitação.'
         append(conversation, 'error', message)
+        progress(job, 'A execução encontrou uma pendência e precisa de atenção')
         with STATE_LOCK:
             job.update(status='error', error=message)
     finally:
-        if process and process.poll() is None:
-            os.killpg(process.pid, signal.SIGTERM)
+        finished.set()
+        if watcher.is_alive():
+            watcher.join(timeout=3)
         MUTATION.release()
 
 

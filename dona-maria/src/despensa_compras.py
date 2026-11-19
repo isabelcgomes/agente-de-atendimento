@@ -20,7 +20,7 @@ def timestamp():
 
 
 def key(value):
-    return ' '.join(''.join(c for c in unicodedata.normalize('NFD', str(value).casefold())
+    return ' '.join(''.join(c for c in unicodedata.normalize('NFD', unicodedata.normalize('NFKC', str(value)).casefold())
                             if not unicodedata.combining(c)).split())
 
 
@@ -28,8 +28,12 @@ def number(value, positive=False):
     if isinstance(value, bool):
         raise ValueError('Booleano não representa quantidade ou preço')
     try:
-        d = Decimal(str(value).strip().replace(',', '.'))
-    except InvalidOperation:
+        text = str(value).strip().replace(',', '.')
+        for symbol, fraction in conversion_data()['normalizacao_entrada']['quantidades']['unicode_fracoes'].items():
+            text = text.replace(symbol, ' '+fraction)
+        match = re.fullmatch(r'(?:(\d+)\s+)?(\d+)\s*/\s*(\d+)', text.strip())
+        d = (Decimal(match[1] or 0)+Decimal(match[2])/Decimal(match[3])) if match else Decimal(text)
+    except (InvalidOperation, ArithmeticError):
         raise ValueError('Número inválido; use decimal sem separador de milhar') from None
     if not d.is_finite() or d < 0 or (positive and d == 0) or (d and d.adjusted() > 12):
         raise ValueError('Quantidade deve ser positiva; preço não pode ser negativo ou infinito')
@@ -55,7 +59,47 @@ def conversion_data():
 
 @lru_cache(maxsize=2)
 def _conversion_data(path, modified, size):
-    return json.loads(Path(path).read_text(encoding='utf-8'))
+    data = json.loads(Path(path).read_text(encoding='utf-8'))
+    if not isinstance(data.get('convencoes_usuario'), dict):
+        return data
+    # Formato 2: adaptar as tabelas, preservando todos os fatores do arquivo.
+    conventions = [{'ingrediente':name,'medida_origem':measure,'unidade_destino':unit,
+                    'fator':factor,'status':'convencao_usuario'}
+                   for name,measure,unit,factor in data['convencoes_usuario']['fatores']]
+    liquids = data['liquidos']
+    data['conversoes_liquidos'] = [{'medida_origem':measure,'unidade_destino':'L','fator':factor,
+        'ingredientes_permitidos':liquids['ingredientes'],'status':'convencao'}
+        for measure,factor in liquids['fatores_para_L'].items()]
+    data['convencoes_usuario'] = conventions
+    data['equivalencias_solidos'] = []
+    # Razões declaradas no próprio formato 2 para o perfil das referências.
+    ratios = {'xicara_cha':(1,1),'colher_sopa':(1,16),'colher_cha':(1,48),
+              'meia_xicara_cha':(1,2),'terco_xicara_cha':(1,3),'quarto_xicara_cha':(1,4)}
+    for name,state,measure,factor in data['referencias_solidos']['fatores']:
+        base_num,base_den = ratios[measure]
+        derived = [{'medida_origem':target,'unidade_destino':'g','status':'estimativa_derivada',
+                    'numerador':str(Decimal(str(factor))*num*base_den),'denominador':den*base_num}
+                   for target,(num,den) in ratios.items() if target != measure]
+        data['equivalencias_solidos'].append({'ingrediente':name,'estado':state,'medida_origem':measure,
+            'unidade_destino':'g','fator':factor,'status':'estimativa_documentada','fatores_derivados':derived})
+    data['ingredientes_despensa'] = []
+    data['normalizacao_embalagens'] = []
+    for source,names in data['estoque']['ingredientes_por_unidade_original'].items():
+        for name in names:
+            specific = next((r for r in conventions if r['ingrediente']==name and r['medida_origem']==source),None)
+            exact = data['conversoes_exatas'].get(source) or data['estoque']['embalagens'].get(source)
+            rule = ({'unidade_destino':specific['unidade_destino'],'fator':specific['fator'],'status':'convencao_usuario'}
+                    if specific else {'unidade_destino':exact['destino'],'fator':exact['fator'],
+                                      'status':'exata' if source in data['conversoes_exatas'] else 'conteudo_nominal'})
+            data['ingredientes_despensa'].append({'ingrediente':name,'normalizacao_estoque':rule})
+            data['aliases_ingredientes'].setdefault(name,name)
+            if source in data['estoque']['embalagens']:
+                data['normalizacao_embalagens'].append(dict(rule,ingrediente=name,unidade_origem=source,
+                    medidas_receita_equivalentes=data['estoque']['aliases_embalagens'].get(name,[])))
+    for row in conventions+data['equivalencias_solidos']:
+        if row['ingrediente'] != '*':
+            data['aliases_ingredientes'].setdefault(row['ingrediente'],row['ingrediente'])
+    return data
 
 
 def rows_xlsx(file, sheet):
@@ -126,34 +170,142 @@ def canonical(name):
         raise ValueError('Ingrediente deve ter de 1 a 160 caracteres')
     data = conversion_data()
     aliases = {key(k): v for k, v in data['aliases_ingredientes'].items()}
-    return aliases.get(key(name), name.strip())
+    label = key(name)
+    if label in aliases:
+        return aliases[label]
+    # Somente o mesmo ingrediente/corte. Variedades diferentes não são sinônimos.
+    same = {
+        'carne moida':'Carne moída (patinho)', 'carne moida crua':'Carne moída (patinho)',
+        'file de peito de frango':'Peito de frango', 'files de peito de frango':'Peito de frango',
+        'peito de frango em files':'Peito de frango', 'peito de frango em cubos':'Peito de frango',
+        'peito de frango moido':'Peito de frango',
+        'arroz':'Arroz branco tipo 1', 'queijo ralado':'Queijo parmesão ralado',
+        'oleo':'Óleo de soja', 'oleo vegetal':'Óleo de soja', 'leite':'Leite integral',
+        'agua':'Água', 'agua quente':'Água', 'agua fervente':'Água', 'agua fria':'Água',
+    }
+    if label in same:
+        return same[label]
+    plain = re.sub(r'(?:\s+(?:medi[oa]s?|grandes?|pequen[oa]s?|picad[oa]s?|amassad[oa]s?|ralad[oa]s?|descascad[oa]s?|em cubos|cru[oa]s?))+$', '', label)
+    for candidate in [plain, plain[:-1] if plain.endswith('s') else plain]:
+        if candidate in aliases or candidate in same:
+            return aliases.get(candidate, same.get(candidate))
+    return name.strip()
+
+
+AMOUNT = r'(?:\d+\s+\d+\s*/\s*\d+|\d+\s*/\s*\d+|\d+(?:[.,]\d+)?|[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])'
+CONTAINERS = r'\b(?:caixinhas?|caixas?|latas?|potes?|pacotes?|embalagens?|garrafas?|sach[eê]s?)\b'
+
+
+def metric_pattern():
+    aliases = conversion_data()['aliases_medidas']
+    terms = {name for unit in ['kg','mg','g','ml','L'] for name in [unit,*aliases[unit]]}
+    return '('+'|'.join(re.escape(term) for term in sorted(terms,key=len,reverse=True))+r')\b'
+
+
+def measure_input(name, quantity, unit):
+    """Separa a quantidade da medida uma vez, antes de consultar os fatores."""
+    text = str(unit).strip()
+    supplied = number(quantity) if quantity not in [None, ''] else Decimal(1)
+    metric = re.match(r'^\s*('+AMOUNT+r')\s*'+metric_pattern(), text, re.I)
+    if metric:
+        amount = number(metric[1])
+        if supplied not in [Decimal(1), amount]:
+            raise ValueError('Quantidade diverge da medida informada.')
+        return amount, metric[2]
+    head = re.match(r'^\s*('+AMOUNT+r')\s*([^\W\d_].*)$', text, re.I)
+    if head:
+        amount = number(head[1])
+        if supplied not in [Decimal(1), amount]:
+            raise ValueError('Quantidade diverge da medida informada.')
+        supplied, text = amount, head[2].strip()
+    contents = list(re.finditer(r'('+AMOUNT+r')\s*'+metric_pattern(), text, re.I))
+    if re.search(CONTAINERS, text, re.I) and len(contents) == 1:
+        return supplied*number(contents[0][1]), contents[0][2]
+    names = {key(alias): canonical_unit for canonical_unit, aliases in conversion_data()['aliases_medidas'].items()
+             for alias in [canonical_unit, *aliases]}
+    measure = names.get(key(text), text)
+    if quantity in [None, ''] and not head and measure != 'a_gosto':
+        raise ValueError('Quantidade ausente na receita.')
+    if canonical(text) == canonical(name) and any(key(row['ingrediente']) == key(canonical(name))
+            and row['medida_origem'] == 'un' for row in conversion_data()['convencoes_usuario']):
+        measure = 'un'
+    return supplied, measure
+
+
+def recipe_measure(line, name):
+    """Quantidades publicadas e convenções conhecidas prevalecem sobre a transcrição do modelo."""
+    text = str(line).strip()
+    words = {'uma':'1','um':'1','duas':'2','dois':'2','três':'3','tres':'3','quatro':'4',
+             'cinco':'5','seis':'6','meia':'0.5','meio':'0.5'}
+    first = re.match(r'^(\w+)\b', text)
+    if first and first[1].casefold() in words:
+        text = words[first[1].casefold()]+text[first.end():]
+    head = re.match(r'^('+AMOUNT+r')\s*(.*)$', text, re.I)
+    metrics = list(re.finditer(r'('+AMOUNT+r')\s*'+metric_pattern(), text, re.I))
+    if len(metrics) == 1:
+        amount = number(metrics[0][1])
+        # Um conteúdo por embalagem é multiplicado pela contagem, nunca duas vezes.
+        if head and re.match(CONTAINERS, head[2], re.I) and 'total' not in key(text):
+            amount *= number(head[1])
+        return amount, metrics[0][2]
+    if len(metrics) > 1:
+        label = key(canonical(name))
+        anchor = next((term for term in ['parmesao','mussarela','ricota','basmati','frango','jamaica','reino']
+                       if term in label), label.split()[0])
+        matches = [value for i,value in enumerate(metrics) if re.search(r'\b'+re.escape(anchor)+r's?\b',
+                   key(text[value.end():metrics[i+1].start() if i+1 < len(metrics) else len(text)]))]
+        return (number(matches[0][1]),matches[0][2]) if len(matches) == 1 else None
+    if 'a gosto' in key(text):
+        return Decimal(1), 'a_gosto'
+    if not head:
+        return None
+    rest = head[2].strip()
+    aliases = [(alias, measure) for measure, values in conversion_data()['aliases_medidas'].items()
+               for alias in [measure, *values]]
+    for alias, measure in sorted(aliases, key=lambda item:len(item[0]), reverse=True):
+        if re.match(r'^'+re.escape(key(alias))+r'(?:\s|$)', key(rest)):
+            return number(head[1]), measure
+    if canonical(re.sub(r'^de\s+', '', rest,flags=re.I)) == canonical(name) and any(key(row['ingrediente']) == key(canonical(name)) and row['medida_origem'] == 'un'
+           for row in conversion_data()['convencoes_usuario']):
+        return number(head[1]), 'un'
+    return None
 
 
 def normalize(name, quantity, unit, state=None):
     """Converte usando o arquivo do projeto, sem massa -> volume ou densidade genérica."""
     data = conversion_data()
-    names = {key(alias): canonical_unit for canonical_unit, aliases in data['aliases_medidas'].items()
-             for alias in [canonical_unit, *aliases]}
-    measure = names.get(key(unit), unit)
-    qty = number(quantity, True)
+    name = canonical(name)
+    qty, measure = measure_input(name, quantity, unit)
+    aliases = {key(alias):base for base, names in data['aliases_medidas'].items() for alias in [base,*names]}
+    measure = aliases.get(key(measure),measure)
     direct = {'kg': ('g', Decimal(1000)), 'g': ('g', Decimal(1)), 'mg': ('g', Decimal('.001')),
               'L': ('L', Decimal(1)), 'ml': ('L', Decimal('.001')), 'cl': ('L', Decimal('.01')),
               'dl': ('L', Decimal('.1'))}
+    if data.get('conversoes_exatas'):
+        direct = {source:(rule['destino'],Decimal(str(rule['fator'])))
+                  for source,rule in data['conversoes_exatas'].items()
+                  if source != 'un' or not any(key(row['ingrediente']) == key(name) and row['medida_origem']=='un'
+                                              for row in data['convencoes_usuario'])}
     if measure in direct:
         destination, factor = direct[measure]
         return qty * factor, destination, 'exata'
-    candidates = [r for r in data['convencoes_usuario'] if r['ingrediente'] == name and r['medida_origem'] == measure]
+    candidates = [r for r in data['convencoes_usuario'] if key(r['ingrediente']) == key(name) and r['medida_origem'] == measure]
     if not candidates:
         candidates = [r for r in data['normalizacao_embalagens']
-                      if r.get('ingrediente') == name and
+                      if key(r.get('ingrediente', '')) == key(name) and
                       (r['unidade_origem'] == unit or measure in r.get('medidas_receita_equivalentes', []))]
     if not candidates:
-        candidates = [r for r in data['convencoes_usuario'] if r['ingrediente'] == '*' and r['medida_origem'] == measure]
+        # As convenções genéricas são de MASSA; nunca atribuir gramas a líquidos.
+        liquid = any(key(name) in [key(n) for n in r['ingredientes_permitidos']] for r in data['conversoes_liquidos'])
+        if not liquid:
+            candidates = [r for r in data['convencoes_usuario'] if r['ingrediente'] == '*' and r['medida_origem'] == measure]
     if not candidates:
-        candidates = [r for r in data['conversoes_liquidos'] if name in r['ingredientes_permitidos'] and r['medida_origem'] == measure]
+        candidates = [r for r in data['conversoes_liquidos'] if key(name) in [key(n) for n in r['ingredientes_permitidos']] and r['medida_origem'] == measure]
     if not candidates:
         for row in data['equivalencias_solidos']:
-            if row['ingrediente'] != name or (state and row['estado'] != state):
+            if key(row['ingrediente']) != key(name):
+                continue
+            if state and not set(re.findall(r'\w+', key(state))).issubset(set(re.findall(r'\w+', key(row['estado']).replace('_',' ')))):
                 continue
             if row['medida_origem'] == measure:
                 candidates.append(row)
@@ -164,6 +316,8 @@ def normalize(name, quantity, unit, state=None):
     if len(factors) != 1:
         raise ValueError('Medida sem fator ou ambígua para ' + name + ': ' + str(unit) + '. Informe g/L ou estado da preparação.')
     row = candidates[0]
+    if 'numerador' in row:
+        return qty*number(row['numerador'])/number(row['denominador'],True), row['unidade_destino'], row['status']
     return qty * number(row['fator'], True), row['unidade_destino'], row['status']
 
 
@@ -210,6 +364,9 @@ def consultar(db, resumido=False):
 
 # Sugestões qualitativas; não são equivalências de quantidade nem substituições automáticas.
 SUBSTITUTIONS = {
+    'pinoli': [('Amêndoa fatiada', 'Oleaginosa diferente: aceitar uma adaptação de sabor e textura antes de substituir.')],
+    'arroz basmati cru': [('Arroz branco tipo 1', 'Variedade diferente: usar somente após aceitar uma adaptação da receita.')],
+    'arroz basmati': [('Arroz branco tipo 1', 'Variedade diferente: usar somente após aceitar uma adaptação da receita.')],
     'creme de leite': [('Leite integral', 'Avaliar versão de molho com leite; espessura e teor de gordura mudam.'),
                       ('Manteiga', 'Pode compor uma adaptação do molho com leite; não substitui creme sozinha.')],
     'azeite': [('Óleo de soja', 'Para refogar, avaliar o sabor e usar a quantidade da receita adaptada.')],
@@ -241,12 +398,18 @@ def verificar(db, ingredientes, receita_id=None):
             else:
                 requirements[identity] = {'nome': name, 'quantidade': qty, 'unidade': unit, 'tipo': kind}
         except ValueError as exc:
-            pending.append({'ingrediente': name, 'erro': str(exc)})
+            row = stock(db, name)
+            pending.append({'ingrediente': name, 'erro': str(exc),
+                            'quantidade_origem':str(item['quantidade']), 'medida_origem':item['unidade'],
+                            'em_estoque':bool(row and number(row['quantidade']) > 0),
+                            'disponivel':row['quantidade'] if row else '0',
+                            'unidade_estoque':row['unidade'] if row else None})
     result = []
     for requirement in requirements.values():
         name = requirement['nome']; row = stock(db, name)
+        resource = key(name) == 'agua'
         have = number(row['quantidade']) if row else Decimal(0)
-        missing = max(Decimal(0), requirement['quantidade'] - have)
+        missing = Decimal(0) if resource else max(Decimal(0), requirement['quantidade'] - have)
         suggestions = []
         if missing:
             for option, condition in SUBSTITUTIONS.get(key(name), []):
@@ -260,6 +423,7 @@ def verificar(db, ingredientes, receita_id=None):
                        'usar_da_despensa': str(min(have, requirement['quantidade'])),
                        'sobra_na_despensa': str(max(Decimal(0), have-requirement['quantidade'])),
                        'tipo_conversao': requirement['tipo'], 'substituicoes_na_despensa': suggestions,
+                       'recurso_operacional':resource,
                        'opcao_compra': bool(missing),
                        'acao': 'Oferecer substituição ou pesquisar cotação da embalagem inteira; aguardar autorização.' if missing else 'Disponível'})
     return {'sucesso': True, 'receita_id': receita_id, 'orcamento': budget(db), 'ingredientes': result,
@@ -400,7 +564,7 @@ def comparar_orcamento(db, analise, cotacao=None):
               'itens_sem_cobertura': [row['ingrediente'] for row in missing],
               'inclui_frete': False, 'reserva_saldo': False}
     if not analise['analise_completa']:
-        return dict(result, estado='quantidades_pendentes', acao='Esclareça quantidades e conversões antes de concluir custo ou orçamento.')
+        return dict(result, estado='quantidades_pendentes', acao='Não conclua custo ou orçamento enquanto houver quantidades sem fator documentado no JSON ou na receita original.')
     if not missing:
         return dict(result, estado='sem_compras', custo_compras_BRL='0.00',
                     saldo_apos_compra_BRL=current['saldo_disponivel'], cabe_no_orcamento=True,

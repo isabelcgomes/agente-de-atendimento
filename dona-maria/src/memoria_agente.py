@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import secrets
 import sqlite3
@@ -19,6 +20,7 @@ import producao_receitas as producao
 import precificacao_receitas as precificacao
 import fluxo_receitas as fluxo
 import fonte_receitas as fontes
+import precos_ingredientes as precos
 DEFAULT_DB = ROOT / 'dados' / 'memoria_dona_maria.sqlite3'
 GROUPS = ['perfil', 'preferencias', 'equipamentos', 'habilidades', 'operacao',
           'restricoes', 'financeiro', 'decisoes', 'receitas']
@@ -91,6 +93,18 @@ def decode(row):
     return item
 
 
+def recipe_name(value):
+    # Registros históricos/revogados podem ter receita=null ou somente um nome.
+    if not isinstance(value, dict):
+        return None
+    recipe = value.get('receita')
+    if isinstance(recipe, dict):
+        return recipe.get('nome')
+    if isinstance(recipe, str):
+        return recipe
+    return value.get('nome') or value.get('receita_nome')
+
+
 def revision(db):
     return db.execute('SELECT revisao FROM metadata WHERE id=1').fetchone()[0]
 
@@ -107,7 +121,7 @@ def consultar(db, grupo=None, resumido=True):
                           (grupo,) if grupo else ()).fetchall()
         recipes=[]
         if grupo is None:
-            recipes=[{'chave':r['chave'],'nome':json.loads(r['valor_json']).get('receita',{}).get('nome'), 'status':r['status']}
+            recipes=[{'chave':r['chave'],'nome':recipe_name(json.loads(r['valor_json'])), 'status':r['status']}
                      for r in rows if r['grupo']=='receitas']
             rows=[r for r in rows if r['grupo']!='receitas']
         return {'sucesso': True, 'revisao': rev, 'contexto': CONTEXT,
@@ -279,7 +293,7 @@ def _live_search(query, limit):
     repo = Path.home() / '.hermes' / 'hermes-agent'
     sys.path.insert(0, str(repo)) if str(repo) not in sys.path else None
     from hermes_cli.env_loader import load_hermes_dotenv
-    load_hermes_dotenv(hermes_home=Path.home() / '.hermes', project_env=repo / '.env')
+    load_hermes_dotenv(hermes_home=Path(os.environ.get('HERMES_HOME', Path.home() / '.hermes')), project_env=repo / '.env')
     from tools.web_tools import web_search_tool
     return json.loads(web_search_tool(query=query, limit=limit))
 
@@ -327,8 +341,8 @@ def web_search(db, query, limit=5):
     identifier = secrets.token_urlsafe(18)
     _SEARCHES[identifier] = {'criado_em': now(), 'query': query.strip(), 'urls': sorted(urls)}
     return {'sucesso': True, 'pesquisa_id': identifier, 'ferramenta_executada': 'web_search',
-            'resultado_web': result, 'proximo_passo': 'Leia a fonte quando necessário, prepare a candidata '
-            'com receita_apresentar e pergunte uma única vez se gosta de cozinhar o prato. '
+            'resultado_web': result, 'proximo_passo': 'Leia obrigatoriamente a fonte com receita_ler_fonte e valide a receita completa '
+            'com receita_apresentar. Entregue somente nome, ingredientes com quantidades, modo de preparo e link de referência. '
             'Após aceite, confira automaticamente habilidades, utensílios e equipamentos na memória. '
             'Nenhuma receita foi memorizada.'}
 
@@ -339,8 +353,10 @@ def ler_fonte_receita(db, pesquisa_id, url):
         raise ValueError('Leia uma URL retornada por esta busca')
     try:
         content = fontes.read(url)
-        if not content.get('receitas'):
-            raise ValueError('Página sem receita estruturada completa (Recipe/JSON-LD). Use outra fonte da busca.')
+        content['receitas'] = [recipe for recipe in content.get('receitas', [])
+                              if not fontes.presentation_issues(dict(recipe, fonte_url=url))]
+        if not content['receitas']:
+            raise ValueError('Página sem receita completa com nome, quantidades e preparo. Use outra fonte da busca.')
     except Exception as exc:
         return {'sucesso': False, 'erro': 'fonte_indisponivel', 'detalhe': str(exc),
                 'acao': 'Não invente o preparo. Tente outra fonte da busca ou informe a pendência.'}
@@ -396,11 +412,11 @@ def receita_apresentar(db, pesquisa_id, receita):
             'aceite': acceptance,
             'receita': receita, 'memorizada': False, 'fonte_conferida': checked,
             'linhas_sem_comprovacao': missing,
-            'perguntas_feedback': [] if acceptance else ['Você gosta de cozinhar esse prato?'],
+            'perguntas_feedback': [],
             'perguntas_capacidade': producao.discovery(db, receita),
             'producao_validada': False,
             'acao': ('Preserve o aceite existente; não peça nova confirmação. ' if acceptance else
-                     'Mostre esta versão e sua fonte e pergunte uma única vez se gosta de cozinhar esse prato. ')
+                     'Mostre somente a receita completa com nome, ingredientes e quantidades, preparo e referência, sem perguntas ou comentários adicionais. ')
                     + 'Após aceite, confira capacidade automaticamente; pergunte apenas requisitos desconhecidos. '
                     'Depois de validar capacidade e ingredientes, inicie custos automaticamente. '
                     'A escolha autorizada do preço permite cardapio_adicionar, sem confirmação extra. Gostar não autoriza compra.'}
@@ -478,8 +494,70 @@ def verificar_despensa_receita(db, receita_id, ingredientes, cotacao_id=None):
     return result
 
 
+def alvos_precos(analysis):
+    targets = {despensa.key(row['ingrediente']):row for row in analysis.get('faltantes', [])
+               if not row.get('recurso_operacional')}
+    for row in analysis.get('pendencias', []):
+        if row.get('ingrediente') and not row.get('em_estoque'):
+            targets.setdefault(despensa.key(row['ingrediente']), {'ingrediente':row['ingrediente'],
+                               'quantidade_necessaria_pendente':True})
+    return list(targets.values())
+
+
+def pesquisar_preco(db, receita_id, ingrediente):
+    candidate = _temporary_get(_CANDIDATES, receita_id)
+    blocked = producao.guard(db, candidate['hash_versao'])
+    if blocked:
+        return blocked
+    progress = consultar_fluxo_receita(db, receita_id)
+    analysis = progress.get('comparacao_receita') or candidate.get('analise_despensa', {})
+    name = despensa.canonical(ingrediente)
+    target = next((row for row in alvos_precos(analysis) if despensa.key(row['ingrediente']) == despensa.key(name)), None)
+    if not target:
+        return {'sucesso':False,'erro':'ingrediente_nao_faltante','ingrediente':name,
+                'acao':'Use a comparação atual da despensa; não pesquisar compra de ingrediente já disponível.'}
+    searches, hits, offers = [], [], []
+    for query in [name+' preço supermercado', name+' embalagem 200g preço supermercado']:
+        search = web_search(db, query, limit=5)
+        if not search.get('sucesso'):
+            continue
+        searches.append(search)
+        rows = search.get('resultado_web', {}).get('data', {}).get('web', [])
+        hits.extend(rows)
+        offers.extend(value for row in rows if (value := precos.snippet_offer(row, name)))
+        if offers:
+            break
+    if not searches:
+        result = {'sucesso':True,'receita_id':receita_id,'ingrediente':name,'consultado_em':now(),
+                  'pesquisa_realizada':True,'status_pesquisa':'busca_indisponivel','ofertas':[],
+                  'versao_leitura':precos.RESEARCH_VERSION,
+                  'fontes_consultadas':[],'frete_pendente':True,'compra_autorizada':False,
+                  'motivo':search.get('erro','busca_web_falhou')}
+        candidate.setdefault('pesquisas_precos', {})[despensa.key(name)] = result
+        return result
+    if not offers:
+        products = [row for row in hits if precos.product_matches(name, row.get('title', ''))]
+        for row in products[:2]:
+            try:
+                offers.extend(precos.structured_offers(fontes.read_html(row['url']), name, row['url']))
+            except Exception:
+                continue
+    # Preço anunciado não comprova frete ou cobertura de uma quantidade ainda indefinida.
+    result = {'sucesso':True,'receita_id':receita_id,'ingrediente':name,'pesquisa_id':searches[-1]['pesquisa_id'],
+              'versao_leitura':precos.RESEARCH_VERSION,
+              'consultado_em':now(),'pesquisa_realizada':True,
+              'ofertas':[precos.with_coverage(row, target if target.get('unidade') else None) for row in offers[:3]],
+              'fontes_consultadas':[row['url'] for row in hits if row.get('url')],
+              'frete_pendente':True,'compra_autorizada':False}
+    candidate.setdefault('pesquisas_precos', {})[despensa.key(name)] = result
+    return result
+
+
 def verificar_producao(db, receita_id, requisitos):
     candidate = _temporary_get(_CANDIDATES, receita_id)
+    checked = producao.validation(db, candidate['hash_versao'])
+    if checked:
+        return dict(checked, receita_id=receita_id, validacao_reutilizada=True)
     blocked = fonte_guard(candidate)
     if blocked:
         return dict(blocked, producao_validada=False)
@@ -487,9 +565,10 @@ def verificar_producao(db, receita_id, requisitos):
     with db:
         db.execute('INSERT OR REPLACE INTO producao_planos VALUES(?,?)',
                    (candidate['hash_versao'], json.dumps(requisitos, ensure_ascii=False, allow_nan=False)))
-    result.update(receita_id=receita_id, hash_versao=candidate['hash_versao'], revisao=revision(db))
-    if result['producao_validada']:
-        result['proximo_passo'] = 'OBRIGATÓRIO: chame despensa_verificar_receita para comparar TODAS as quantidades do lote com estoque e saldo atuais. Mostre o que já tem e falta, cote faltantes e confira cobertura total, sem afirmar que cabe enquanto houver preço/quantidade pendente.'
+        result.update(receita_id=receita_id, hash_versao=candidate['hash_versao'], revisao=revision(db))
+        if result['producao_validada']:
+            result['proximo_passo'] = 'Inicie a precificação automaticamente, normalizando os ingredientes e calculando o CMV. Não repita a conferência de habilidades/equipamentos nem peça autorização para calcular.'
+        result = producao.remember_validation(db, candidate['hash_versao'], result)
     return result
 
 
@@ -497,6 +576,11 @@ def conferir_execucao_receita(db, receita_id):
     """Relê a URL escolhida e confronta o preparo com a memória, sem novo aceite."""
     candidate = _temporary_get(_CANDIDATES, receita_id)
     recipe = candidate['receita']
+    checked = producao.validation(db, candidate['hash_versao'])
+    if checked:
+        return {'sucesso':True, 'receita_id':receita_id, 'hash_versao':candidate['hash_versao'],
+                'receita':recipe, 'capacidade':checked, 'validacao_reutilizada':True,
+                'acao':checked.get('proximo_passo', checked['acao'])}
     candidate['fonte_conferida'] = False
     candidate.pop('execucao_conferida', None)
     search = web_search(db, recipe['fonte_url'], limit=3)
@@ -521,7 +605,7 @@ def conferir_execucao_receita(db, receita_id):
               'revisao_memoria': revision(db), 'conferencia_execucao': candidate['execucao_conferida'],
               'pesquisa_reconsulta': {'pesquisa_id': search['pesquisa_id'], 'query': recipe['fonte_url'], 'sucesso': True},
               'capacidade': producao.conferir_memoria(db, recipe, candidate['hash_versao']),
-              'acao': 'A fonte foi relida e a memória consultada. Resolva as perguntas de capacidade automaticamente; gostar não autoriza compra, preço ou inclusão no cardápio.'}
+              'acao': 'A fonte foi relida e a memória consultada. Derive os requisitos e valide uma única vez com receita_verificar_producao, sem repetir perguntas. Se passar, inicie os custos; se falhar, encerre com a mensagem definida.'}
     return result
 
 
@@ -630,10 +714,25 @@ def precificar_receita(db, receita_id, ingredientes=None, porcoes=None, evidenci
         blocked = producao.guard(db, version)
         if blocked: return blocked
         analysis=despensa.verificar(db,ingredientes,receita_id)
-        result=precificacao.calculate(db,analysis,porcoes)
         if candidate:
             candidate['ingredientes_normalizados'] = ingredientes
             candidate['analise_despensa'] = analysis
+        research = pesquisas_precos_atuais(candidate or dict(payload, receita_id=receita_id), analysis)
+        targets = alvos_precos(analysis)
+        done = {despensa.key(item['ingrediente']) for item in research}
+        pending = [item for item in targets if despensa.key(item['ingrediente']) not in done]
+        if pending:
+            return {'sucesso':False,'erro':'pesquisa_precos_pendente','receita_id':receita_id,
+                    'comparacao_receita':analysis,'faltantes_precos':pending,
+                    'pendencias':[{'ingrediente':item['ingrediente'],'erro':'Pesquisar o preço antes de calcular o custo da receita.'} for item in pending],
+                    'acao':'Pesquise primeiro os preços de todos os ingredientes faltantes. O custo da receita ainda não foi calculado.'}
+        without_price = [item for item in research if not item.get('ofertas')]
+        if without_price:
+            return {'sucesso':False,'erro':'precos_faltantes_sem_valor','receita_id':receita_id,
+                    'comparacao_receita':analysis,
+                    'pendencias':[{'ingrediente':item['ingrediente'],'erro':'A pesquisa ainda não forneceu um preço utilizável.'} for item in without_price],
+                    'acao':'Obtenha os valores faltantes antes de calcular o custo da receita.'}
+        result=precificacao.calculate(db,analysis,porcoes)
         result.update(receita_id=receita_id,nome_receita=recipe['nome'],hash_versao=version)
         if result['sucesso']:
             plan=db.execute('SELECT requisitos_json FROM producao_planos WHERE hash_versao=?',(version,)).fetchone()
@@ -693,7 +792,33 @@ def _consultar_fluxo_receita(db, receita_id=None):
         return dict(answer,etapa='normalizar_ingredientes',acao='Normalize cada linha original uma vez e chame despensa_verificar_receita. Não reinicie a busca nem repita o aceite.')
     if answer['comparacao_receita']['faltantes']:
         return dict(answer,etapa='garantir_ingredientes',acao='Mostre os faltantes reais; cote e aguarde autorização se necessário. Preserve o aceite existente.')
+    if answer['comparacao_receita']['pendencias']:
+        return dict(answer,etapa='corrigir_medidas',acao='Aplique as convenções do documento. Solicite apenas medidas sem fator documentado; pesquise os preços dos ingredientes ausentes mesmo enquanto as medidas estiverem pendentes.')
     return dict(answer,etapa='precificar',acao='Chame receita_precificar com este receita_id e porções reais. O aceite anterior foi comprovado na sessão; não peça nova confirmação e não exija salvar a receita para calcular CMV.')
+
+
+def pesquisas_precos_atuais(candidate, analysis):
+    targets = {despensa.key(row['ingrediente']):row for row in alvos_precos(analysis)}
+    if not targets:
+        return []
+    research = dict(candidate.get('pesquisas_precos', {}))
+    for row in fluxo.messages():
+        if row.get('role') != 'tool' or row.get('tool_name') != 'mcp__dona_maria_memoria__preco_pesquisar':
+            continue
+        value = fluxo.result(row.get('content', ''))
+        if value.get('receita_id') == candidate.get('receita_id') and value.get('sucesso'):
+            name = despensa.key(value['ingrediente'])
+            if value.get('consultado_em', '') >= research.get(name, {}).get('consultado_em', ''):
+                research[name] = value
+    def recent_price(value):
+        try:
+            age = (datetime.now(timezone.utc)-datetime.fromisoformat(value['consultado_em'])).total_seconds()
+            return value.get('versao_leitura') == precos.RESEARCH_VERSION and age < (300 if not value.get('ofertas') else 86400)
+        except (KeyError, ValueError, TypeError):
+            return False
+    return [dict(value, ofertas=[precos.with_coverage(offer,
+        targets[name] if targets[name].get('unidade') else None) for offer in value.get('ofertas', [])])
+        for name,value in research.items() if name in targets and recent_price(value)]
 
 
 def consultar_fluxo_receita(db, receita_id=None):
@@ -703,6 +828,13 @@ def consultar_fluxo_receita(db, receita_id=None):
         result['conferencia_execucao'] = dict(candidate['execucao_conferida'],
             memoria_consultada=True, revisao_memoria=revision(db),
             capacidade=producao.conferir_memoria(db, candidate['receita'], candidate['hash_versao']))
+    if candidate:
+        result['faltantes_precos'] = alvos_precos(result.get('comparacao_receita', {}))
+        result['pesquisas_precos'] = pesquisas_precos_atuais(candidate, result.get('comparacao_receita', {}))
+        done = {despensa.key(item['ingrediente']) for item in result['pesquisas_precos']}
+        if (result.get('aceite') and result.get('etapa') in ['garantir_ingredientes','corrigir_medidas','precificar']
+                and any(despensa.key(item['ingrediente']) not in done for item in result['faltantes_precos'])):
+            result.update(etapa='pesquisar_faltantes',acao='Pesquise os preços de todos os ingredientes faltantes antes de calcular o custo da receita.')
     return result
 
 
@@ -782,7 +914,7 @@ def consultar_medida(db, ingrediente, medida, quantidade=1, estado=None):
             raise ValueError('Massa e volume são incompatíveis; não usar densidade presumida.')
     except ValueError as exc:
         return {'sucesso':False,'erro':'conversao_indefinida','ingrediente':name,
-                'detalhe':str(exc),'acao':'Esclareça medida/estado; não invente fator nem leia toda a tabela.'}
+                'detalhe':str(exc),'acao':'Use os dados da receita original e o JSON de conversões. Não peça conversões à usuária nem invente um fator ausente.'}
     return {'sucesso':True,'ingrediente':name,'quantidade_origem':str(quantidade),
             'medida_origem':medida,'quantidade_normalizada':str(value),'unidade':unit,
             'tipo':kind,'estimativa_requer_aceite':kind.startswith('estimativa')}
@@ -867,11 +999,11 @@ _requirement = {'type':'object', 'properties': {
     'campo':{'type':'string','description':'Campo interno do fato, ex.: bocas, capacidade_litros. Não omitir capacidade necessária.'},
     'minimo':{'type':'number','exclusiveMinimum':0},
     'igual':{'type':['boolean','string','number','object','array']},
-    'pergunta':{'type':'string','description':'Pergunta à Dona Maria para confirmar este requisito, se desconhecido.'}},
+    'pergunta':{'type':'string','description':'Descrição do requisito para auditoria interna; não repetir perguntas à usuária.'}},
     'required':['chave','pergunta'],'additionalProperties':False,
     'oneOf':[{'required':['minimo'],'not':{'required':['igual']}}, {'required':['igual'],'not':{'required':['minimo']}}]}
 TOOLS.append({'name':'receita_verificar_producao',
-    'description':'Valide o lote contra fatos confirmados: equipamentos/capacidades, técnicas e operação. Fogão: campo=bocas, minimo necessário. Pergunte pendências.',
+    'description':'Confira uma única vez equipamentos, habilidades e operação com os fatos existentes. O resultado é persistido. Se passar, avance aos custos; se falhar, encerre sem perguntas. Fogão: campo=bocas, minimo necessário.',
     'inputSchema':{'type':'object','properties':{
         'receita_id':{'type':'string'}, 'requisitos':{'type':'object','properties':{
             'lote':{'type':'string','description':'Lote exato/porções a produzir; não pressupor escala.'},
@@ -896,7 +1028,10 @@ TOOLS.append({'name':'receita_precificar',
 TOOLS.append({'name':'receita_consultar_fluxo','description':'Retome candidata, aceite e pendências da sessão antes de repetir etapas. Recuperação de rascunho não autoriza salvar.',
     'inputSchema':{'type':'object','properties':{'receita_id':{'type':'string','description':'Opcional: retoma a candidata mais recente da sessão.'}},'additionalProperties':False}})
 TOOLS.extend([
-    {'name': 'receita_conferir_execucao', 'description': 'Após interesse no prato, releia o link exato e confira os requisitos na memória; devolva perguntas pendentes.',
+    {'name':'preco_pesquisar', 'description':'Pesquise preço anunciado e embalagem de UM ingrediente realmente faltante, com fonte e frete pendente; não compra nem altera saldo.',
+     'inputSchema':{'type':'object','properties':{'receita_id':{'type':'string'},'ingrediente':{'type':'string'}},
+                    'required':['receita_id','ingrediente'],'additionalProperties':False}},
+    {'name': 'receita_conferir_execucao', 'description': 'Após interesse no prato, confira a fonte e os dados existentes. Reutilize validação concluída; não reabra perguntas de habilidades ou equipamentos.',
      'inputSchema': {'type': 'object', 'properties': {'receita_id': {'type': 'string'}},
                      'required': ['receita_id'], 'additionalProperties': False}},
     {'name': 'receita_ler_fonte', 'description': 'Leia a página da busca para conferir ingredientes e preparo antes da validação de capacidade.',
@@ -936,6 +1071,7 @@ def dispatch(db, name, args):
                 'receita_precificar': precificar_receita,
                 'receita_consultar_fluxo': consultar_fluxo_receita,
                 'receita_ler_fonte': ler_fonte_receita,
+                'preco_pesquisar': pesquisar_preco,
                 'receita_conferir_execucao': conferir_execucao_receita,
                 'cardapio_adicionar': adicionar_cardapio, 'cardapio_consultar': consultar_cardapio,
                 'medidas_consultar': consultar_medida,

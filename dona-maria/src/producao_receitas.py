@@ -16,7 +16,32 @@ def initialize(db):
       CREATE TABLE IF NOT EXISTS producao_cotacoes(
         cotacao_id TEXT PRIMARY KEY REFERENCES despensa_cotacoes(id), hash_versao TEXT NOT NULL
         REFERENCES producao_planos(hash_versao), requisitos_json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS producao_validacoes(
+        sessao TEXT NOT NULL, hash_versao TEXT NOT NULL, resultado_json TEXT NOT NULL,
+        PRIMARY KEY(sessao, hash_versao));
     ''')
+
+
+def validation(db, version):
+    from fluxo_receitas import SESSION
+    row = db.execute('SELECT resultado_json FROM producao_validacoes WHERE sessao=? AND hash_versao=?',
+                     (SESSION.get() or '', version)).fetchone()
+    if not row:
+        return None
+    result = json.loads(row[0])
+    if not result['producao_validada']:
+        from memoria_agente import revision
+        if result.get('fluxo_encerrado') or result.get('revisao') != revision(db):
+            return None
+    return result
+
+
+def remember_validation(db, version, result):
+    from fluxo_receitas import SESSION
+    result = dict(result, validacao_concluida=result['producao_validada'])
+    db.execute('INSERT OR REPLACE INTO producao_validacoes VALUES(?,?,?)',
+               (SESSION.get() or '', version, json.dumps(result, ensure_ascii=False)))
+    return validation(db, version)
 
 
 def required_hints(recipe):
@@ -140,6 +165,9 @@ def evaluate(db, recipe, spec):
 
 
 def guard(db, version):
+    checked = validation(db, version)
+    if checked:
+        return None if checked['producao_validada'] else dict(checked, sucesso=False, erro='producao_nao_validada')
     row=db.execute('SELECT * FROM producao_planos WHERE hash_versao=?',(version,)).fetchone()
     if row:
         result=evaluate(db,None,json.loads(row['requisitos_json']))
@@ -185,6 +213,9 @@ def discovery(db, recipe):
 
 def conferir_memoria(db, recipe, version):
     """Conferência automática: só um plano completo pode confirmar o lote."""
+    checked = validation(db, version)
+    if checked:
+        return checked
     plan = db.execute('SELECT requisitos_json FROM producao_planos WHERE hash_versao=?', (version,)).fetchone()
     if plan:
         return evaluate(db, recipe, json.loads(plan[0]))
@@ -199,5 +230,5 @@ def conferir_memoria(db, recipe, version):
         checks.append({'grupo': group, 'chave': key, 'estado': state, 'valor_confirmado': value})
     return {'sucesso': True, 'producao_validada': False, 'requer_plano_lote': True,
             'verificacoes': checks, 'pendencias': [c for c in checks if c['estado'] != 'presenca_declarada'],
-            'perguntas': discovery(db, recipe),
-            'acao': 'A memória foi consultada automaticamente. Pergunte somente os requisitos pendentes e derive o plano do lote com receita_verificar_producao, sem esperar pedido de conferência. Não infira capacidades quantitativas de presença declarada.'}
+            'perguntas': [],
+            'acao': 'Use a memória e as respostas já fornecidas para derivar o plano e executar receita_verificar_producao. Pergunte apenas pelos dados desconhecidos e revalide após registrar as respostas. Não infira capacidades.'}

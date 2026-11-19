@@ -85,6 +85,11 @@ def search_for(url, session=None, before=None):
     rows=messages(session)
     for row in reversed(rows):
         if before and _order(row) >= (before if isinstance(before, tuple) else (before, 1000)):continue
+        if row['role'] == 'tool' and row['tool_name'] == 'mcp__dona_maria_memoria__preco_pesquisar' and recent(row):
+            value = result(row['content'])
+            if value.get('sucesso') and value.get('pesquisa_realizada') and url in value.get('fontes_consultadas', []):
+                return {'criado_em':value['consultado_em'], 'query':'Preço de '+value['ingrediente'],
+                        'urls':value['fontes_consultadas'],'origem':'recibo_preco_da_sessao','mensagem_id':row['id']}
         if row['role']!='tool' or row['tool_name'] not in ['web_search','mcp__dona_maria_memoria__web_search'] or not recent(row):continue
         value=result(row['content']); web=value.get('resultado_web',value)
         hits=web.get('data',{}).get('web',[])
@@ -204,9 +209,13 @@ def ingredient_mapping(recipe, ingredients):
                           'frango':['frango'],'batata':['batata','batatas']}.get(anchor,
                           [anchor,anchor[:-1] if anchor.endswith('s') else anchor+'s'])
             if any(re.search(r'\b'+re.escape(word)+r'\b',core) for word in alternatives):
+                if anchor == 'arroz':
+                    variety = next((x for x in ['basmati','arboreo','carnaroli','jasmim','integral','preto'] if x in core), None)
+                    if variety and variety not in label:
+                        continue
                 if anchor=='queijo':
                     kind=next((x for x in ['mussarela','parmesao','ricota'] if x in label),None)
-                    if kind and kind not in core:continue
+                    if kind and kind not in core and any(x in core for x in ['mussarela','parmesao','ricota']):continue
                 matches.append(index)
         if not matches:
             pending.append({'ingrediente':name,'erro':'Não corresponde ao ingrediente principal de nenhuma linha da versão apresentada. Substituições exigem discussão e nova versão; chantilly não substitui automaticamente creme de leite ou requeijão.'})
@@ -216,6 +225,11 @@ def ingredient_mapping(recipe, ingredients):
         if index is None:
             pending.append({'ingrediente':name,'erro':'Indique qual linha usa este ingrediente repetido.','indices_possiveis':matches});continue
         row=dict(item,ingrediente=name,indice_receita=index)
+        published = pantry.recipe_measure(lines[index], name)
+        if published:
+            row.update(quantidade=str(published[0]), unidade=published[1])
+        if row.get('estado') and fold(row['estado']) not in fold(lines[index]):
+            row.pop('estado')
         if original!=index:adjustments.append({'ingrediente':name,'indice_receita_anterior':original,'indice_receita':index})
         # Só conferir medidas explícitas e convenções inequívocas. Não extrair
         # quantidades de parênteses/adaptações nem inventar equivalências.
@@ -235,7 +249,7 @@ def ingredient_mapping(recipe, ingredients):
             elif 'a gosto' in core:
                 expected=pantry.normalize(name,1,'a gosto')[:2]
             if expected:
-                actual=pantry.normalize(name,item['quantidade'],item['unidade'],item.get('estado'))[:2]
+                actual=pantry.normalize(name,row['quantidade'],row['unidade'],row.get('estado'))[:2]
                 if actual!=expected:
                     pending.append({'ingrediente':name,'indice_receita':index,'erro':'Quantidade difere da receita/convenção do projeto. Corrija esta linha sem pedir novo aceite.',
                                     'quantidade_esperada':str(expected[0]),'unidade_esperada':expected[1]})

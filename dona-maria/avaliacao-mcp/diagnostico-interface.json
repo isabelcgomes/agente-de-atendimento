@@ -1,0 +1,56 @@
+{
+  "causa": "Gateway persistente continuava executando plugin e MCP anteriores às alterações presentes em agente-de-atendimento.",
+  "correcao": "Reinício do gateway do perfil /home/opc/agente-de-atendimento/.hermes para carregar o desenvolvimento atual.",
+  "validacao": {
+    "backend_testes": 82,
+    "interface_testes": 13,
+    "rede_real": true,
+    "llm_real": true,
+    "rota": "POST /api/chat e GET /api/jobs/{id}",
+    "status_interface": "done",
+    "resultado_validado": true,
+    "buscas": 2,
+    "operacoes": 11,
+    "fontes_tentadas": 8
+  },
+  "fontes_tentadas": {
+    "https://www.tudogostoso.com.br/receita/22671-peito-de-frango-moido.html": {
+      "sucesso": true
+    },
+    "https://www.receiteria.com.br/receita/frango-ao-molho-branco/": {
+      "sucesso": false,
+      "erro": "fonte_indisponivel",
+      "detalhe": "Client error '403 Forbidden' for url 'https://www.receiteria.com.br/receita/frango-ao-molho-branco/'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403"
+    },
+    "https://www.receiteria.com.br/receita/frango-ao-molho-branco-simples/": {
+      "sucesso": false,
+      "erro": "fonte_indisponivel",
+      "detalhe": "Client error '403 Forbidden' for url 'https://www.receiteria.com.br/receita/frango-ao-molho-branco-simples/'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403"
+    },
+    "https://receitas.globo.com/regionais/rpc/receitas-paranaenses/file-de-peito-de-frango-ao-molho-branco-g.ghtml": {
+      "sucesso": false,
+      "erro": "fonte_indisponivel",
+      "detalhe": "Página sem receita completa com nome, quantidades e preparo. Use outra fonte da busca."
+    },
+    "https://receitas.globo.com/receitas-sadia/file-de-peito-de-frango-ao-molho-branco.ghtml": {
+      "sucesso": false,
+      "erro": "fonte_indisponivel",
+      "detalhe": "Página sem receita completa com nome, quantidades e preparo. Use outra fonte da busca."
+    },
+    "https://www.tudogostoso.com.br/receita/21216-arroz-marroquino.html": {
+      "sucesso": false,
+      "erro": "fonte_indisponivel",
+      "detalhe": "Página sem receita completa com nome, quantidades e preparo. Use outra fonte da busca."
+    },
+    "https://www.tudogostoso.com.br/receita/56349-arroz-com-carne-moida-e-batata.html": {
+      "sucesso": false,
+      "erro": "fonte_indisponivel",
+      "detalhe": "Página sem receita completa com nome, quantidades e preparo. Use outra fonte da busca."
+    },
+    "https://www.tudogostoso.com.br/receita/108056-carne-moida-com-creme-de-cebola.html": {
+      "sucesso": true
+    }
+  },
+  "escopo": "Skills e regras de validação preservadas; sem compras ou inclusão no cardápio durante a avaliação.",
+  "reproduzir": "python3 /home/opc/agente-de-atendimento/dona-maria/avaliacao-mcp/verificar_interface.py"
+}

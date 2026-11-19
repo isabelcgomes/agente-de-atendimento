@@ -82,19 +82,6 @@ Na fase de testes, eu assumi que Dona Maria teria as mesmas habilidades e equipa
 
 A decisão de usar como base a cozinha e habilidades do influenciador Luiz Felipe Alves se deu para utilizar uma fonte terceira de informações evitando viéses no desenvolvimento para experiências pessoais.
 
-### Arquitetura multi-agente
-
-A escolha de uma arquitetura multi-agêntica, forçando o hermes a delegar tarefas específicas para subagentes, para desenvolvimento do desafio se deu para otimizar o uso da janela de contexto do agente com resultados que entregam valor ao usuário. 
-
-Como temos quatro tarefas principais e altamente especializadas:
-
-- Busca na memória
-- Conversa com o usuário + orquestração dos agentes
-- Busca na internet
-- Cálculo de preço
-
-A instrução para cada uma dessas tarefas, se implementadas em um único agente, pode "consumir" contexto demais, levando o agente a ignorar instruções importantes e essenciais para o seu correto funcionamento. Separando as atividades em três agentes (a decisão de unir a tarefa de busca na memória, conversa com o usuário e orquestração dos agentes em um único agente se deu por estas instruções se sobreporem durante a implementação. Para evitar redundância e consumo desnecessário de tokens e demais recursos, essas três tarefas foram delegadas a um único agente).
-
 ### Cálculo de custos
 
 Para uma melhor estimativa de preço cobrado por prato, fiz uma alteração na regra do valor mínimo do prato de `CVM/0.90` para `CVM/0.90 + Custos Fixos`, de forma a gerar valores mais realistas para o cardápio. Dessa forma a precificação fica em:
@@ -111,14 +98,26 @@ considerando custos fixos da operação (divididos por pratos), como:
 O custo fixo tradicionalmente também inclui salários. Como estamos tratando do caso de uso de um restaurante emprocesso de abertura, ainda não são considerados salários na conta de custos operacionais.
 
 ![custos](images/custos.png)
-## Interface gráfica
 
-A aplicação web local reúne o chat com o Hermes, a troca do Excel da despensa,
-o cardápio atualizado e o orçamento com a lista de compras.
+### Arquitetura multi-agente
 
-```bash
-python3 -B dona-maria/interface/server.py
-```
+A escolha de uma arquitetura multi-agêntica, forçando o hermes a delegar tarefas específicas para subagentes, para desenvolvimento do desafio se deu para otimizar o uso da janela de contexto do agente com resultados que entregam valor ao usuário. 
 
-Acesse `http://localhost:8080`. Instruções de acesso à VM, integração e testes
-estão em [dona-maria/interface/README.md](dona-maria/interface/README.md).
+Como temos quatro tarefas principais e altamente especializadas:
+
+- Busca na memória
+- Conversa com o usuário + orquestração dos agentes
+- Busca na internet
+- Cálculo de preço
+
+A instrução para cada uma dessas tarefas, se implementadas em um único agente, pode "consumir" contexto demais, levando o agente a ignorar instruções importantes e essenciais para o seu correto funcionamento. Separando as atividades em três agentes (a decisão de unir a tarefa de busca na memória, conversa com o usuário e orquestração dos agentes em um único agente se deu por estas instruções se sobreporem durante a implementação. Para evitar redundância e consumo desnecessário de tokens e demais recursos, essas três tarefas foram delegadas a um único agente).
+
+### Interface gráfica
+
+Para demonstrar as funcionalidades, desenvolvi uma interface gráfica para expor a solução. Nela pensei no fluxo do usuário como um todo:
+
+- A atualização da despensa
+- A conversa com o agente com atalhos para facilitar a experiência
+- A conferência do cardápio e dos preços
+- A conferência dos itens da despensa
+- A conferência dos itens comprados

@@ -2516,7 +2516,7 @@ mcp_servers:
   dona_maria_memoria:
     command: /usr/bin/python
     args:
-      - /home/opc/dona-maria/src/iniciar_memoria.py
+      - /home/opc/agente-de-atendimento/dona-maria/src/iniciar_memoria.py
     enabled: true
 onboarding:
   seen:

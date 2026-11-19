@@ -38,7 +38,7 @@ Essa interação pode sofrer alterações e não seguir a ordem linear se:
 
 # Implementação
 
-## Decisões ao longo do projeto
+## Escolhas
 
 ### Versão
 
@@ -50,19 +50,19 @@ Para uma primeira versão, utilizei o setup padrão do Hermes. Especialmente por
 
 ![](images/setup.png)
 
-### Escolha do modelo
+### Modelo
 
-O modelo escolhido foi o `deepseek-ai/DeepSeek-V4-Flash`. A escolha se deu por ser um modelo treinado e utilizável em português que tem uma janela de contexto de 1M de tokens, que, também é suportada pela API do hugginface, necessária para o problema, open-source, o que reduz custos na implementação e testes do projeto, consegue lidar bem com documentos estruturados como uma planilha e suporta *tool calling* mesmo que sua latência seja maior do que outras opções disponíveis. Essa decisão foi tomada considerando que o agente irá se comunicar por texto com a Dona Maria.
+O modelo escolhido foi o `deepseek-ai/DeepSeek-V4-Flash`. A escolha se deu por ser um modelo treinado e utilizável em português que tem uma janela de contexto de 1M de tokens, que, também, é suportada pela API do hugginface, necessária para o problema, open-source, o que reduz custos na implementação e testes do projeto, consegue lidar bem com documentos estruturados como uma planilha e suporta *tool calling* mesmo que sua latência seja maior do que outras opções disponíveis. Essa decisão foi tomada considerando que o agente irá se comunicar apenas por texto com a Dona Maria.
 
 ### Ambiente de desenvolvimento
 
-Como backend, eu escolhi rodar localmente, porque subi uma VM isolada em nuvem. Pensando em escalabilidade e um ambiente produtivo real, eu escolheria uma estratégia de conteinerização com docker e kubernetes para escalar o serviço a medida que a demanda aumenta.
+Como backend, eu escolhi rodar localmente, porque subi uma VM isolada em nuvem. Pensando em escalabilidade e um ambiente produtivo real, eu escolheria uma estratégia de conteinerização com docker e kubernetes para escalar o serviço de acordo com a demanda. 
 
 ![](images/backend.png)
 
 ### Engine de busca 
 
-A engine de busca web escolhida foi o DuckDuckGo por ser gratuita e facilmente replicável em outros ambientes. Ainda, a escolha é orientada por receitas simples serem expostas nos resultados de busca (web_search) sem a necessidade de entrarem uma página e extrair informações (web_extract) o que consumiria um volume maior de tokens. A escolha do Duck Duck Go é pensada em economia de custos tanto na implementação da ferramenta de busca quanto de uso do modelo (economia de tokens).
+A engine de busca web escolhida foi o DuckDuckGo por ser gratuita, replicável e não depender de interface gráfica. Ainda, a escolha é orientada em uma decisão de negócio, entendendo que o agente é focado em pequenos comerciantes, existe um foco maior em receitas mais simples ou 'caseiras' e estas são expostas nos resultados de busca (web_search) sem a necessidade de entrarem uma página e extrair informações (web_extract) o que consumiria um volume maior de tokens. A ferramenta de busca do Duck Duck Go permite apenas o uso de web_search e trava requisições com web_extract, essa limitação foi pensada para economia de tokens do modelo reduzindo o processamento dos conteúdos das páginas vindos do web_extract.
 
 ![](images/ddgs.png)
 
@@ -111,3 +111,14 @@ considerando custos fixos da operação (divididos por pratos), como:
 O custo fixo tradicionalmente também inclui salários. Como estamos tratando do caso de uso de um restaurante emprocesso de abertura, ainda não são considerados salários na conta de custos operacionais.
 
 ![custos](images/custos.png)
+## Interface gráfica
+
+A aplicação web local reúne o chat com o Hermes, a troca do Excel da despensa,
+o cardápio atualizado e o orçamento com a lista de compras.
+
+```bash
+python3 -B dona-maria/interface/server.py
+```
+
+Acesse `http://localhost:8080`. Instruções de acesso à VM, integração e testes
+estão em [dona-maria/interface/README.md](dona-maria/interface/README.md).

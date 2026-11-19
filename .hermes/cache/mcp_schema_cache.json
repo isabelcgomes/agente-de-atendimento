@@ -1,6 +1,6 @@
 {
   "dona_maria_memoria": {
-    "fingerprint": "64a14876ab4a40f2",
+    "fingerprint": "4071c12728611196",
     "tools": [
       {
         "name": "memoria_consultar",
@@ -32,6 +32,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -109,6 +112,9 @@
             "revisao_esperada"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -145,6 +151,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -236,6 +245,9 @@
             "revisao_esperada"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -261,6 +273,9 @@
             "query"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -316,6 +331,9 @@
             "receita"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -355,6 +373,9 @@
             "revisao_esperada"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -373,6 +394,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -435,6 +459,9 @@
             "ingredientes"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -518,6 +545,9 @@
             "receita_id"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -545,6 +575,9 @@
             "evidencia_usuario"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -739,6 +772,9 @@
             "requisitos"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -805,6 +841,9 @@
             "receita_id"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -823,6 +862,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -843,6 +885,9 @@
             "receita_id"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -867,6 +912,9 @@
             "url"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -897,6 +945,9 @@
             "evidencia_usuario"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -911,6 +962,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       },
       {
@@ -944,11 +998,15 @@
             "medida"
           ],
           "additionalProperties": false
+        },
+        "annotations": {
+          "readOnlyHint": false
         }
       }
     ],
     "utility_tools": [],
-    "ttl_ms": 300000,
-    "written_at": 1794998752.971717
+    "ttl_ms": 0,
+    "written_at": 1795088501.5117984,
+    "cache_scope": "private"
   }
 }

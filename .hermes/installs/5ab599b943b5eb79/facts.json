@@ -1,12 +1,12 @@
 {
   "packages": {
     "venv": {
-      "environment": "/home/opc/.hermes/installs/5ab599b943b5eb79/environments/d319577785e0417db8851871712d8272/venv",
+      "environment": "/home/opc/agente-de-atendimento/.hermes/installs/5ab599b943b5eb79/environments/d319577785e0417db8851871712d8272/venv",
       "extras": [
         "all",
         "ddgs"
       ],
-      "resolved_lock": "/home/opc/.hermes/installs/5ab599b943b5eb79/environments/d319577785e0417db8851871712d8272/workspace/uv.lock",
+      "resolved_lock": "/home/opc/agente-de-atendimento/.hermes/installs/5ab599b943b5eb79/environments/d319577785e0417db8851871712d8272/workspace/uv.lock",
       "stamp": "a9c10ad018521ff25d23abc3b3faee8b3d7209638822071136e9fb015645b024"
     }
   },

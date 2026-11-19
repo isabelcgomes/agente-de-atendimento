@@ -6,3 +6,8 @@
 /.hermes/logs/
 /.hermes/sessions/
 /.hermes/terminal-sessions/
+
+# Interface local: histórico de conversa, importações e backups
+/dona-maria/src/dados/interface/
+/dona-maria/interface/__pycache__/
+/dona-maria/interface/tests/__pycache__/

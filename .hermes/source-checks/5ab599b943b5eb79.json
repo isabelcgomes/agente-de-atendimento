@@ -1,7 +1,7 @@
 {
   "identity": {
     "root": "/home/opc/.hermes/hermes-agent",
-    "home": "/home/opc/.hermes",
+    "home": "/home/opc/agente-de-atendimento/.hermes",
     "head": "3b421578588243f920886e6fe79a6faa87ea026e",
     "origin": "https://github.com/NousResearch/hermes-agent.git",
     "branch": "main",
@@ -11,7 +11,7 @@
     "channelProtocol": 3,
     "forwardOnly": true
   },
-  "ts": 1794941156.1432931,
+  "ts": 1795087371.8581693,
   "status": {
     "supported": true,
     "hermesRoot": "/home/opc/.hermes/hermes-agent",
@@ -21,7 +21,7 @@
     "currentBranch": "HEAD",
     "dirty": false,
     "channel": "stable",
-    "fetchedAt": 1794941156143,
+    "fetchedAt": 1795087371858,
     "targetSha": "ae2a81ccc00e9b7c06301523e5bb09608397149c",
     "updateAvailable": true,
     "sourceVersion": "0.23.2",

@@ -10,11 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SESSION = ContextVar('dona_maria_session', default=None)
-HISTORY = Path(str(Path.home() / '.hermes' / 'state.db'))
-ROOT = Path(str(Path.home() / 'dona-maria'))
-# HISTORY = Path('/home/opc/.hermes/state.db')
-# ROOT = Path('/home/opc/dona-maria')
-
+HISTORY = Path(str(Path.home() / 'agente-de-atendimento' / '.hermes' / 'state.db'))
+ROOT = Path(str(Path.home() / 'agente-de-atendimento' / 'dona-maria'))
 
 def fold(text):
     return ''.join(c for c in unicodedata.normalize('NFD', str(text).lower()) if not unicodedata.combining(c))
